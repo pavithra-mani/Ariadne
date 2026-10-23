@@ -1,0 +1,26 @@
+{
+  "answerable": [
+    {"q": "What are the symptoms of powdery mildew on mulberry?", "sources": ["leaf_diseases.md"], "must": [["white"], ["powder"]], "checklist": ["white", "powder", "underside", "yellow"]},
+    {"q": "How do I manage grasserie in silkworms?", "sources": ["diseases.md"], "must": [["burn", "remove"], ["disinfect", "bleaching", "formalin"]], "checklist": ["remove", "burn", "disinfect", "temperature"]},
+    {"q": "What causes flacherie in silkworm larvae?", "sources": ["diseases.md"], "must": [["bacteria", "virus"], ["leaf"]], "checklist": ["bacteria", "leaf", "humidity", "ventilation"]},
+    {"q": "How is pebrine transmitted?", "sources": ["diseases.md"], "must": [["mother moth", "eggs"]], "checklist": ["mother", "eggs", "disease-free", "destroy"]},
+    {"q": "What is muscardine and how does it look?", "sources": ["diseases.md"], "must": [["fungus"], ["white", "chalky"]], "checklist": ["fungus", "white", "mummified", "disinfect"]},
+    {"q": "Can I feed silkworms leaves that were sprayed with pesticide?", "sources": ["pests_and_garden.md", "leaf_diseases.md"], "must": [["waiting period"]], "checklist": ["waiting period", "label", "sensitive"]},
+    {"q": "How should fresh cocoons be stored?", "sources": ["cocoon_storage.md"], "must": [["cool", "ventilated"], ["thin layer", "tray"]], "checklist": ["cool", "ventilated", "thin layer", "sun"]},
+    {"q": "What temperature do late-age silkworm larvae need?", "sources": ["practice.md"], "must": [["23", "26"]], "checklist": ["23", "26", "humidity"]},
+    {"q": "How many kilograms of cocoons are needed for one kilogram of raw silk?", "sources": ["reeling_and_yarn.md"], "must": [["eight", "twelve", "8", "12"]], "checklist": ["eight", "twelve", "breed"]},
+    {"q": "How should raw silk yarn be stored?", "sources": ["reeling_and_yarn.md"], "must": [["dry"], ["sunlight"]], "checklist": ["dry", "sunlight", "moisture"]},
+    {"q": "What should a reeler do when a yarn delivery is delayed?", "sources": ["reeling_and_yarn.md"], "must": [["notify"], ["alternative", "re-allocate"]], "checklist": ["notify", "re-allocate", "alternative"]},
+    {"q": "What should a spinner do when demand or the target quantity rises?", "sources": ["twisting.md"], "must": [["gap", "target"], ["reelers"]], "checklist": ["gap", "reelers", "alternative", "stock"]},
+    {"q": "When should a farmer escalate to the reeler?", "sources": ["escalation.md"], "must": [["fifth", "infectious"]], "checklist": ["fifth", "infectious", "grasserie", "early"]},
+    {"q": "What causes leaf spot in mulberry?", "sources": ["leaf_diseases.md"], "must": [["cercospora", "fungus"]], "checklist": ["fungus", "brown", "fertiliser"]}
+  ],
+  "unanswerable": [
+    "What is the price of raw silk in Japan today?",
+    "How do I treat dengue fever?",
+    "What is the GDP of India?",
+    "How to breed muga silkworms in Assam?",
+    "Who is the prime minister of Canada?",
+    "Which mobile phone should I buy for my farm?"
+  ]
+}
