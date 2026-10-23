@@ -91,6 +91,32 @@ class OnnxClassifier:
         return Prediction(self.crop, top[0][0], top[0][1], top, "onnx", False)
 
 
+class GeminiVisionClassifier:
+    """Opt-in stand-in (DISEASE_FALLBACK=gemini) until a trained model is dropped in: Gemini looks at the photo
+    and must answer with one of the known labels. Clearly flagged as a model fallback in the finding."""
+    def __init__(self, crop: str):
+        self.crop, self.labels = crop, DEFAULT_LABELS[crop]
+
+    def predict(self, image_path: str) -> Prediction:
+        from app.llm.provider import LLMUnavailable, get_llm
+        from app.llm.schemas import DiagnosisOut
+        llm = get_llm()
+        if llm is None:
+            return StubClassifier(self.crop).predict(image_path)
+        path = Path(image_path)
+        mime = "image/png" if path.suffix.lower() == ".png" else "image/webp" if path.suffix.lower() == ".webp" else "image/jpeg"
+        system = (f"You identify {self.crop} health problems from a photo. Choose exactly one label from: {', '.join(self.labels)}. "
+                  "Use 'healthy' only if the photo shows a healthy specimen. If the photo is not a clear picture of the "
+                  "specimen, give a low confidence. Never exceed 0.9 confidence.")
+        try:
+            out = llm.generate_json(DiagnosisOut, system, "Identify the problem in this photo.", "vision.classify", images=[(path.read_bytes(), mime)])
+        except LLMUnavailable:
+            return StubClassifier(self.crop).predict(image_path)
+        label = out.label if out.label in self.labels else self.labels[0]
+        conf = min(max(out.confidence, 0.0), 0.9) if out.label in self.labels else 0.2
+        return Prediction(self.crop, label, conf, [(label, conf)], "gemini_vision", False)
+
+
 @lru_cache
 def get_classifier(crop: str) -> DiseaseClassifier:
     model, cfg_path = MODEL_DIR / f"{crop}.onnx", MODEL_DIR / f"{crop}.json"
@@ -99,4 +125,7 @@ def get_classifier(crop: str) -> DiseaseClassifier:
             return OnnxClassifier(crop, model, json.loads(cfg_path.read_text()))
         except Exception as exc:  # bad model must not take the service down
             print(f"[vision] could not load {model.name}: {exc}; using stub")
+    from app.config import settings
+    if settings.disease_fallback == "gemini":
+        return GeminiVisionClassifier(crop)
     return StubClassifier(crop)

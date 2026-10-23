@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     groq_model: str = "llama-3.3-70b-versatile"
     langsmith_api_key: str = ""
 
+    # Gemini drives the agentic reasoning (triage, tool-using advisor, RAG grading, recovery planning)
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash-lite"   # fast, generous free-tier limits (checked live)
+    gemini_rpm: int = 20                           # client-side requests/minute ceiling
+    llm_budget_per_request: int = 40               # max LLM calls for one user request incl. child incidents
+    llm_max_tool_steps: int = 4
+    disease_fallback: str = ""                     # "gemini": use Gemini vision until a trained model is dropped in
+
     allow_demo_reset: bool = False  # enables POST /api/system/reset-demo (docker-compose sets it)
 
     # Recovery pipeline

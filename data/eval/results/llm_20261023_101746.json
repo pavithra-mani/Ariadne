@@ -1,7 +1,8 @@
 {
-  "created": "2026-10-22T17:43:22",
-  "groq": false,
-  "judge": "heuristic",
+  "created": "2026-10-23T10:17:46",
+  "groq": true,
+  "llm_agents": true,
+  "judge": "llm",
   "metrics": {
     "A. Agent workflow and tool behaviour": {
       "Task Completion Rate": 100.0,
@@ -10,23 +11,23 @@
       "Structured Output Validity": 100.0,
       "Tool Execution Success Rate": 100.0,
       "Handoff Accuracy": 100.0,
-      "Unnecessary Tool Call Rate": 2.2,
+      "Unnecessary Tool Call Rate": 2.0,
       "Workflow Termination Accuracy": 100.0
     },
     "B. Answer quality": {
-      "Answer Correctness": 100.0,
-      "Completeness (judge: heuristic)": 98.2,
-      "Relevance (judge: heuristic)": 81.7
+      "Answer Correctness": 92.9,
+      "Completeness (judge: llm)": 75.6,
+      "Relevance (judge: llm)": 96.4
     },
     "C. Retrieval and grounding": {
-      "Groundedness / Faithfulness": 100.0,
-      "Citation Accuracy": 100.0,
-      "Retrieval Recall@5": 100.0,
-      "Context Precision@5": 47.1
+      "Groundedness / Faithfulness": 96.6,
+      "Citation Accuracy": 47.7,
+      "Retrieval Recall@5": 75.5,
+      "Context Precision@5": 72.9
     },
     "D. Safe handling of uncertainty": {
       "Abstention Accuracy": 100.0,
-      "Hallucination Rate": 0.0
+      "Hallucination Rate": 3.4
     }
   },
   "counts": {
@@ -40,25 +41,25 @@
     "out_checked": 51,
     "handoff_tests": 18,
     "handoff_ok": 18,
-    "tool_attempts": 127,
-    "tool_success": 127,
-    "calls_total": 180,
+    "tool_attempts": 132,
+    "tool_success": 132,
+    "calls_total": 197,
     "term_tests": 18,
     "term_ok": 18,
     "abst_tests": 9,
     "abst_ok": 9,
     "calls_unnecessary": 4,
     "qa_tests": 14,
-    "qa_correct": 14,
-    "claims": 55,
-    "claims_supported": 55,
-    "cites": 55,
-    "cites_ok": 55,
-    "recall_sum": 14.0,
-    "prec_sum": 6.6,
+    "qa_correct": 13,
+    "claims": 58,
+    "claims_supported": 56,
+    "cites": 65,
+    "cites_ok": 31,
+    "recall_sum": 10.567,
+    "prec_sum": 10.2,
     "recall_n": 14,
-    "comp_sum": 13.75,
-    "rel_sum": 11.44
+    "comp_sum": 10.58,
+    "rel_sum": 13.5
   },
   "rows": [
     {
@@ -72,7 +73,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.5
+      "seconds": 3.2
     },
     {
       "id": "F2 silkworm flacherie text only",
@@ -85,7 +86,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.4
+      "seconds": 6.0
     },
     {
       "id": "F3 mulberry mild mildew",
@@ -98,7 +99,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.4
+      "seconds": 2.7
     },
     {
       "id": "F4 mulberry severe blight",
@@ -111,7 +112,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.8
+      "seconds": 6.6
     },
     {
       "id": "F5 healthy leaf is not an incident",
@@ -124,7 +125,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.4
+      "seconds": 130.8
     },
     {
       "id": "F6 blurry photo -> expert referral",
@@ -138,7 +139,7 @@
         "termination": true,
         "abstained": true
       },
-      "seconds": 0.4
+      "seconds": 3.7
     },
     {
       "id": "R1 low yarn output (factory)",
@@ -151,7 +152,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 2.6
+      "seconds": 15.7
     },
     {
       "id": "R2 cocoon shortage",
@@ -164,7 +165,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 3.8
+      "seconds": 46.5
     },
     {
       "id": "R3 minor delay",
@@ -177,7 +178,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.5
+      "seconds": 2.9
     },
     {
       "id": "R4 zero yarn stock",
@@ -190,7 +191,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 2.3
+      "seconds": 10.7
     },
     {
       "id": "R5 cocoon stock critical (stock trigger) -> approve",
@@ -204,7 +205,7 @@
         "termination": true
       },
       "final_status": "resolved",
-      "seconds": 1.8
+      "seconds": 7.3
     },
     {
       "id": "S1 demand surge -> approve",
@@ -218,7 +219,7 @@
         "termination": true
       },
       "final_status": "resolved",
-      "seconds": 1.3
+      "seconds": 29.7
     },
     {
       "id": "S2 demand surge -> reject",
@@ -232,7 +233,7 @@
         "termination": true
       },
       "final_status": "rejected",
-      "seconds": 1.2
+      "seconds": 15.2
     },
     {
       "id": "S3 small target met",
@@ -245,7 +246,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.4
+      "seconds": 5.5
     },
     {
       "id": "S4 impossible target (no source in 5 searches)",
@@ -259,7 +260,7 @@
         "termination": true,
         "abstained": true
       },
-      "seconds": 0.8
+      "seconds": 4.5
     },
     {
       "id": "Q1 farmer knowledge question",
@@ -272,7 +273,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.2
+      "seconds": 25.7
     },
     {
       "id": "Q2 reeler knowledge question",
@@ -285,7 +286,7 @@
         "handoff": true,
         "termination": true
       },
-      "seconds": 0.2
+      "seconds": 9.7
     },
     {
       "id": "Q3 out-of-scope question",
@@ -299,101 +300,101 @@
         "termination": true,
         "abstained": true
       },
-      "seconds": 0.4
+      "seconds": 10.6
     },
     {
       "id": "QA What are the symptoms of powdery mildew on mulberr",
       "correct": true,
-      "claims": 4,
-      "supported": 4,
-      "recall@5": 1.0,
-      "precision@5": 0.6
+      "claims": 2,
+      "supported": 2,
+      "recall@5": 0.5,
+      "precision@5": 0.8
     },
     {
       "id": "QA How do I manage grasserie in silkworms?",
       "correct": true,
-      "claims": 4,
-      "supported": 4,
-      "recall@5": 1.0,
-      "precision@5": 0.2
+      "claims": 10,
+      "supported": 10,
+      "recall@5": 0.5,
+      "precision@5": 0.6
     },
     {
       "id": "QA What causes flacherie in silkworm larvae?",
       "correct": true,
-      "claims": 5,
-      "supported": 5,
-      "recall@5": 1.0,
-      "precision@5": 0.4
+      "claims": 3,
+      "supported": 3,
+      "recall@5": 0.5,
+      "precision@5": 1.0
     },
     {
       "id": "QA How is pebrine transmitted?",
       "correct": true,
-      "claims": 5,
-      "supported": 5,
-      "recall@5": 1.0,
-      "precision@5": 0.4
+      "claims": 4,
+      "supported": 4,
+      "recall@5": 0.67,
+      "precision@5": 0.8
     },
     {
       "id": "QA What is muscardine and how does it look?",
       "correct": true,
-      "claims": 3,
-      "supported": 3,
+      "claims": 6,
+      "supported": 6,
       "recall@5": 1.0,
-      "precision@5": 0.6
+      "precision@5": 0.8
     },
     {
       "id": "QA Can I feed silkworms leaves that were sprayed with",
       "correct": true,
       "claims": 5,
       "supported": 5,
-      "recall@5": 1.0,
-      "precision@5": 1.0
+      "recall@5": 0.4,
+      "precision@5": 0.4
     },
     {
       "id": "QA How should fresh cocoons be stored?",
       "correct": true,
-      "claims": 5,
+      "claims": 4,
+      "supported": 4,
+      "recall@5": 1.0,
+      "precision@5": 1.0
+    },
+    {
+      "id": "QA What temperature do late-age silkworm larvae need?",
+      "correct": false,
+      "claims": 2,
+      "supported": 1,
+      "recall@5": 0.67,
+      "precision@5": 1.0
+    },
+    {
+      "id": "QA How many kilograms of cocoons are needed for one k",
+      "correct": true,
+      "claims": 3,
+      "supported": 3,
+      "recall@5": 0.67,
+      "precision@5": 1.0
+    },
+    {
+      "id": "QA How should raw silk yarn be stored?",
+      "correct": true,
+      "claims": 6,
       "supported": 5,
       "recall@5": 1.0,
       "precision@5": 0.8
     },
     {
-      "id": "QA What temperature do late-age silkworm larvae need?",
-      "correct": true,
-      "claims": 2,
-      "supported": 2,
-      "recall@5": 1.0,
-      "precision@5": 0.2
-    },
-    {
-      "id": "QA How many kilograms of cocoons are needed for one k",
-      "correct": true,
-      "claims": 2,
-      "supported": 2,
-      "recall@5": 1.0,
-      "precision@5": 0.2
-    },
-    {
-      "id": "QA How should raw silk yarn be stored?",
-      "correct": true,
-      "claims": 5,
-      "supported": 5,
-      "recall@5": 1.0,
-      "precision@5": 0.4
-    },
-    {
       "id": "QA What should a reeler do when a yarn delivery is de",
       "correct": true,
-      "claims": 5,
-      "supported": 5,
+      "claims": 4,
+      "supported": 4,
       "recall@5": 1.0,
       "precision@5": 0.4
     },
     {
       "id": "QA What should a spinner do when demand or the target",
       "correct": true,
-      "claims": 2,
-      "supported": 2,
+      "claims": 4,
+      "supported": 4,
       "recall@5": 1.0,
       "precision@5": 0.4
     },
@@ -408,10 +409,10 @@
     {
       "id": "QA What causes leaf spot in mulberry?",
       "correct": true,
-      "claims": 5,
-      "supported": 5,
-      "recall@5": 1.0,
-      "precision@5": 0.8
+      "claims": 2,
+      "supported": 2,
+      "recall@5": 0.67,
+      "precision@5": 1.0
     },
     {
       "id": "OOD What is the price of raw silk in Japan today?",
@@ -422,19 +423,19 @@
       "abstained": true
     },
     {
-      "id": "OOD What is the GDP of India?",
-      "abstained": true
-    },
-    {
-      "id": "OOD How to breed muga silkworms in Assam?",
-      "abstained": true
-    },
-    {
       "id": "OOD Who is the prime minister of Canada?",
       "abstained": true
     },
     {
       "id": "OOD Which mobile phone should I buy for my farm?",
+      "abstained": true
+    },
+    {
+      "id": "OOD How do I bake sourdough bread?",
+      "abstained": true
+    },
+    {
+      "id": "OOD What will the weather be in Paris tomorrow?",
       "abstained": true
     }
   ]

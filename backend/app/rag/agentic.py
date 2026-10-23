@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 import math
 from functools import lru_cache
 
+from app.llm.provider import LLMUnavailable, get_llm
+from app.llm.schemas import GradeOut
 from app.rag.store import collection
 
 STOP = set("""a an the and or of to in on for with is are was were be been it this that these those
@@ -78,11 +80,13 @@ class Passage:
     similarity: float
     overlap: float
     relevant: bool = False
+    origin: str = ""
+    publisher: str = ""
 
     def dict(self) -> dict:
         return {"id": self.id, "title": self.title, "source": self.source, "topic": self.topic,
                 "text": self.text, "similarity": round(self.similarity, 3),
-                "overlap": round(self.overlap, 3), "relevant": self.relevant}
+                "overlap": round(self.overlap, 3), "relevant": self.relevant, "origin": self.origin, "publisher": self.publisher}
 
 
 @dataclass
@@ -94,9 +98,10 @@ class RagResult:
     abstained: bool = False
     confidence: float = 0.0
     reason: str = ""
+    graded_by: str = "rules"
 
     def dict(self) -> dict:
-        return {"query": self.query, "queries_tried": self.queries_tried,
+        return {"query": self.query, "queries_tried": self.queries_tried, "graded_by": self.graded_by,
                 "passages": [p.dict() for p in self.passages], "points": self.points,
                 "abstained": self.abstained, "confidence": round(self.confidence, 3),
                 "reason": self.reason}
@@ -114,7 +119,7 @@ def retrieve(query: str, k: int = 5, topics: list[str] | None = None) -> list[Pa
     for i, doc in enumerate(res["documents"][0]):
         m = res["metadatas"][0][i]
         out.append(Passage(res["ids"][0][i], m["title"], m["source"], m["topic"], doc,
-                           1.0 - res["distances"][0][i], overlap(query, doc)))
+                           1.0 - res["distances"][0][i], overlap(query, doc), origin=m.get("origin", ""), publisher=m.get("publisher", "")))
     return out
 
 
@@ -181,18 +186,58 @@ def extract_points(query: str, passages: list[Passage], limit: int = 5, intent: 
     return out
 
 
-def agentic_rag(query: str, topics: list[str] | None = None, hint: str = "", k: int = 8, intent: str = "") -> RagResult:
+GRADER_SYSTEM = ("You grade retrieval for a sericulture knowledge base. Given a user query and numbered passages, return the "
+                 "indexes of passages that actually help answer it (`relevant`), whether together they are enough to answer "
+                 "(`answerable`), and, if not, one better search query (`rewrite`). Be strict: a passage on a different crop, "
+                 "disease or topic is not relevant. Return JSON.")
+
+
+def _llm_grade(query: str, cands: list[Passage]) -> GradeOut | None:
+    llm = get_llm()
+    if llm is None or not cands:
+        return None
+    body = "\n".join(f"[{i}] {p.title}: {p.text[:520]}" for i, p in enumerate(cands))
+    try:
+        return llm.generate_json(GradeOut, GRADER_SYSTEM, f"Query: {query}\nPassages:\n{body}", "rag.grade")
+    except LLMUnavailable:
+        return None
+
+
+def agentic_rag(query: str, topics: list[str] | None = None, hint: str = "", k: int = 8, intent: str = "",
+                use_llm: bool = False) -> RagResult:
+    """retrieve -> grade -> rewrite -> retrieve ... -> cite or abstain. With use_llm, an LLM grades the
+    candidates and proposes the rewrite (agentic RAG); otherwise (or if the LLM is unavailable) the
+    embedding/lexical grader and rule-based rewrite are used."""
     res = RagResult(query=query)
     q = query
+    llm_rewrite: str | None = None
     for attempt in range(MAX_REWRITES + 1):
         if attempt:
-            q = rewrite(query, attempt, hint)
+            q = llm_rewrite or rewrite(query, attempt, hint)
+            llm_rewrite = None
             if q in res.queries_tried:
                 continue
         res.queries_tried.append(q)
-        good = grade(q, retrieve(q, k, topics))
-        if not good and topics:  # widen scope once before giving up on this attempt
-            good = grade(q, retrieve(q, k, None))
+        cands = retrieve(q, k, topics)
+        if not cands and topics:
+            cands = retrieve(q, k, None)
+        for p in cands:
+            p.overlap = overlap(q, p.text)
+        good: list[Passage] = []
+        graded = _llm_grade(q, cands) if use_llm else None
+        if graded is not None:
+            res.graded_by = "llm"
+            good = [cands[i] for i in dict.fromkeys(graded.relevant) if 0 <= i < len(cands) and cands[i].similarity >= 0.15]
+            for p in good:
+                p.relevant = True
+            if not (graded.answerable and good):
+                good = []
+                llm_rewrite = (graded.rewrite or "").strip() or None
+        else:
+            use_llm = False  # LLM unavailable: stay on the heuristic grader for the remaining attempts
+            good = grade(q, cands)
+            if not good and topics:
+                good = grade(q, retrieve(q, k, None))
         if good:
             res.passages = good[:3]
             res.points = extract_points(q, res.passages, intent=intent)

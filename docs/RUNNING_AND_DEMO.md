@@ -94,7 +94,9 @@ Flat-colour placeholders; the **stub classifier decides from the file name**.
 Any real photo works if its file name contains a label (`flacherie_tray3.jpg`, `leaf_rust_plot2.jpg`). Labels: mulberry `healthy, leaf_rust, leaf_spot, powdery_mildew, leaf_blight, mosaic_virus`; silkworm `healthy, grasserie, flacherie, muscardine, pebrine`. The crop follows the login (`mf*` → mulberry, `sf*` → silkworm). "Affected ≈ %" in the Assistant changes severity and urgency.
 
 ### Knowledge base (`data/kb/`)
-Eight short Markdown files (33 passages) that I wrote so the demo runs. **Placeholder text, not official CSB/FAO guidance.**
+**13 real documents** collected from public sources (CSB SILKS disease pages, FAO *Silk Reeling and Testing Manual* chapters, INSERCO *Sericologia* articles, a rearing guideline and a rearing review, an open-access cocoon-price paper, MoSPI sericulture statistics), plus the 8 short placeholder notes I wrote at the start. **22 documents, about 718 passages.** `data/kb/SOURCES.md` lists every file with its URL, publisher and caveats. Citations in the UI link to the real source; placeholder passages are labelled *placeholder text, not an official source*.
+
+Things to know: the two *Sericologia* PDFs are OCR text (typos, run-together words); the FAO files are licensed for personal/classroom use, so keep them internal and cite FAO; csb.gov.in itself and the Karnataka sericulture portals could not be fetched (robots.txt / site errors), so there is no Karnataka-specific content yet. Raw downloads are in `data/kb_raw/` (git-ignored, never executed).
 
 ---
 
@@ -111,8 +113,28 @@ Labels are normalised (`"Powdery Mildew"` → `powdery_mildew`) and should match
 ### 3.2 Knowledge base
 Drop `.md`/`.txt`/`.pdf` into `data/kb/<topic>/` (optional front-matter `title:` / `source:`), then `docker compose exec backend python -m app.rag.ingest --reset` (replaces the corpus; delete the placeholders first). The eval set `data/eval/qa_set.json` names the placeholder files, so update it for your corpus.
 
-### 3.3 Groq / LangSmith keys
-`.env` in the repo root (see `.env.example`): `GROQ_API_KEY=…`, `LANGSMITH_API_KEY=…`, then `docker compose up -d backend`. Groq only turns verified facts into schema-checked text; numbers and decisions are locked. **System** tab shows live vs fallback.
+### 3.3 API keys and the agents
+Only `GEMINI_API_KEY` is needed for the agentic behaviour. Put it in `.env` in the repo root (see `.env.example`) and run `docker compose up -d backend`. The **System** tab then shows *Gemini agents: live* with a running count of calls, rate-limit hits and fallbacks.
+
+**What Gemini does** (everything else stays deterministic, and every LLM step has a rule-based fallback):
+
+| Agent step | What the LLM does | Guard |
+|---|---|---|
+| **Triage** (intake) | Reads a free-text message, decides question / report / stock issue / demand request, extracts the numbers the user wrote. Asks a **follow-up question** if the message is too vague. | A number must literally appear in the message; a role can only get intents it has; a vague message never becomes a guessed incident. |
+| **Symptom reading** | Maps a text-only disease description to a known label | Confidence capped at 0.7 without a photo |
+| **Agentic RAG** | Grades retrieved passages, rewrites the query, abstains | Only passages that exist in the knowledge base can be cited |
+| **Advisor agent** | **Function-calling loop** over read-only tools (`search_knowledge`, `get_my_stock`, `get_supply_outlook`, `get_my_partners`, `recall_similar_incidents`), then writes the answer | Tools are bound to the caller's own entity; there are **no write tools**; citations must refer to retrieved passages or the answer is forced to abstain; steps not supported by evidence are labelled *general advice*; severity, priority and escalation are locked to the calculations |
+| **Recovery planner** | Chooses a sourcing strategy per case (cheapest / nearest / fewest sources / balanced) from real candidate statistics | Only reorders candidates; capacity, time limits, the 5-search bound and human approval are unchanged |
+
+Each request has a budget (`LLM_BUDGET_PER_REQUEST`, default 40 calls, shared by the buyer incidents it opens). If the key is missing, the quota is exhausted (free tier returns 429; the client retries with backoff), or the budget is spent, the same step runs on the rule-based path, so nothing breaks. The agent trace (Incidents → *agent trace*) lists every LLM call (purpose, model, seconds) and every tool the agent called with its arguments.
+
+Latency: expect 3 to 8 s for a question and 15 to 40 s when an incident also opens incidents for its buyers (each buyer adds a planning and an advisory call). Gemini free-tier latency varies call to call.
+
+**`DISEASE_FALLBACK=gemini`** lets Gemini classify photos into the known labels until your trained models are in `data/models/` (a trained model always takes priority). It is a stand-in, flagged as such in the finding and on the System tab; the design's disease classifier is still your model.
+
+`GROQ_API_KEY` is optional: if set, Groq formats structured output instead of Gemini. `LANGSMITH_API_KEY` turns on LangSmith tracing; a local trace is always recorded.
+
+**Tests never use your key** (the suite forces keys off and uses a scripted fake LLM). `python -m app.eval.run --reset` is deterministic and rule-based; add `--llm` to evaluate the Gemini agents (about 140 calls; it writes `llm_*.json`).
 
 ### 3.4 Your own participants, stock, prices
 Plain tables, loadable by SQL or script: `entities` (kind, name, village, lat/lon, balance, capacity, `warehouse_id`; warehouses have `owner_id`), `links` (supplier → buyer), `inventory` (on_hand, daily_demand, demand_std, lead_time_days, shelf_life_days, stocked_on, unit_price, is_finished), `users` (username, role = entity kind, entity_id). **There is no CSV importer yet**; send me your file layout and I will add one.

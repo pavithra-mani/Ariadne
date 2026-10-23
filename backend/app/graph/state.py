@@ -13,6 +13,8 @@ class State(TypedDict, total=False):
     crop: str | None
     fields: dict[str, Any]
     # supervisor
+    clarify: str          # follow-up question when the LLM could not tell what the user wants
+    strategy: dict
     route: str            # mulberry | silkworm | reeler | spinner | advisor
     mode: str             # incident | query
     incident_kind: str

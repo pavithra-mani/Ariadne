@@ -24,10 +24,17 @@ Reset demo data: `python -m app.db.seed --reset` (drops the schema). Tests: `cd 
 | What | Where | Notes |
 |---|---|---|
 | Mulberry / silkworm disease models | `data/models/<crop>.onnx` + `<crop>.json` | See `data/models/README.md`. Until then a **flagged stub** is used (label from file name, e.g. `grasserie_x.jpg`). Other formats: implement `DiseaseClassifier` in `backend/app/vision/classifier.py`. |
-| Knowledge base (CSB, SILKS, FAO…) | `data/kb/<topic>/*.md|txt|pdf` | Then `python -m app.rag.ingest --reset`. The shipped corpus is **placeholder text I wrote** — replace it. |
-| Groq key | `.env` → `GROQ_API_KEY` | Groq only structures verified facts into Pydantic schemas. Without a key a deterministic template is used (same schemas). |
+| Knowledge base | `data/kb/<topic>/*.md|txt|pdf` | 13 real public documents are included (see `data/kb/SOURCES.md`) alongside 8 placeholder notes. Add more, then `python -m app.rag.ingest --reset`. |
+| Gemini key | `.env` → `GEMINI_API_KEY` | Drives the agents: LLM triage with follow-up questions, a function-calling advisor with read-only tools, LLM-graded RAG, recovery planning. See *How the agents work* below and `docs/RUNNING_AND_DEMO.md` §3.3. Without it everything runs on the rule-based path. |
+| Groq key (optional) | `.env` → `GROQ_API_KEY` | If set, Groq formats structured output instead of Gemini. |
 | LangSmith key | `.env` → `LANGSMITH_API_KEY` | Tracing turns on automatically. A local per-incident trace is always recorded and shown in the UI. |
 | Real farmers / reelers / spinners / warehouses | tables `entities`, `links`, `inventory` | `backend/app/db/seed.py` generates a synthetic network around Ramanagara. |
+
+## How the agents work
+The graph is LangGraph; each node is either deterministic (calculations, OR-Tools routing, the severity × urgency matrix, ledger) or an **LLM agent step with a deterministic fallback**:
+* **Triage** reads free text and asks a follow-up when it is unclear. **Advisor** runs a Gemini function-calling loop over read-only, entity-scoped tools and must cite retrieved passages. **RAG** is LLM-graded. **Recovery planner** picks a sourcing strategy.
+* The model never writes: stock and money only move through deals a human approves. Decision fields (severity, priority, escalation) are locked to the calculations, citations are verified against what was actually retrieved, and unsupported advice is labelled.
+* Calls are rate-limited, retried and budgeted per request; any failure drops that step to its rule-based path.
 
 ## Phase-by-phase demo script
 1. **Foundation & roles** — log in as each role. `mf1` sees only own farm; `sf1` also sees supplying mulberry farmers and reelers; `reeler1` sees spinners/farmers; `spinner1` his reelers. 

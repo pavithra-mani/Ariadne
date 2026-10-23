@@ -12,6 +12,7 @@ from typing import Callable, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from app.config import settings
+from app.llm.provider import LLMUnavailable, get_llm, stats as llm_stats
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -47,7 +48,9 @@ def _call(messages: list[dict]) -> str:
 
 def structure(schema: type[T], task: str, facts: dict, fallback: Callable[[], T],
               locked: dict | None = None) -> tuple[T, str]:
-    """Return (validated_output, producer) where producer is 'groq' | 'groq_repaired' | 'template'."""
+    """Return (validated_output, producer): 'groq' | 'groq_repaired' | 'gemini' | 'template'.
+
+    Groq (if configured) formats; otherwise Gemini does; otherwise the deterministic template."""
     stats["calls"] += 1
     if groq_enabled():
         messages = [
@@ -70,6 +73,16 @@ def structure(schema: type[T], task: str, facts: dict, fallback: Callable[[], T]
             except Exception:  # network / auth / rate limit
                 time.sleep(0.2)
                 break
+    llm = get_llm()
+    if llm is not None:
+        try:
+            out = llm.generate_json(schema, SYSTEM, f"Task: {task}\nFACTS: {json.dumps(facts, default=str)}", "structure")
+            if locked:
+                out = out.model_copy(update=locked)
+            stats["gemini_ok"] = stats.get("gemini_ok", 0) + 1
+            return out, "gemini"
+        except LLMUnavailable:
+            llm_stats["fallbacks"] += 1
     stats["fallback"] += 1
     out = fallback()
     return (out.model_copy(update=locked) if locked else out), "template"

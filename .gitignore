@@ -6,3 +6,4 @@ dist/
 data/chroma/
 data/uploads/
 *.pyc
+data/kb_raw/

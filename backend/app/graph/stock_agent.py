@@ -13,7 +13,7 @@ from app.db.models import Entity, Inventory
 from app.db.session import session_scope
 from app.graph.common import traced
 from app.llm.schemas import Advisory
-from app.llm.structured import structure
+from app.agents.advisor import produce
 
 LOW_STOCK_RX = re.compile(r"(stock|inventory).{0,40}(low|critical|running out|run out|depleted|empty|finished)|"
                           r"(low|critical|running out|out of).{0,40}(stock|inventory)", re.I)
@@ -38,12 +38,29 @@ def pick_product(db, entity_id: int, fields: dict, msg: str) -> str | None:
     return worst[0].product if worst else None
 
 
+def apply_stated_stock(db, me: Entity, product: str, kg: float) -> dict | None:
+    """The owner told Ariadne how much they really hold: record it as an audited stock correction
+    (same authority as the dashboard's Update stock form)."""
+    from app.db.models import AuditLog, Ledger
+    inv = get_inv(db, me.id, product)
+    if inv is None or abs(inv.on_hand - kg) <= max(0.1 * inv.on_hand, 5):
+        return None
+    before = inv.on_hand
+    inv.on_hand = max(kg, 0.0)
+    db.add(Ledger(entity_id=me.id, product=product, delta_qty=inv.on_hand - before, memo="stock stated in chat"))
+    db.add(AuditLog(actor=f"entity:{me.id}", action="stock_stated_in_chat", ref=product, details={"before": before, "after": inv.on_hand}))
+    return {"product": product, "from": round(before, 1), "to": round(inv.on_hand, 1)}
+
+
 @traced("stock_monitor_agent", "specialist")
 def low_stock_agent(state):
     fields, msg = state.get("fields") or {}, state.get("message", "")
+    corrected = None
     with session_scope() as db:
         me = db.get(Entity, state["entity_id"])
         product = pick_product(db, me.id, fields, msg)
+        if fields.get("stock_now_kg") is not None:
+            corrected = apply_stated_stock(db, me, product, float(fields["stock_now_kg"]))
         inv = get_inv(db, me.id, product)
         st = stock_status(inv)
         target = st.reorder_point + inv.daily_demand * 3  # order-up-to level: ROP plus three days of use
@@ -77,21 +94,25 @@ def low_stock_agent(state):
               "stock": stock, "order_qty": order_qty, "target_level": round(target, 1), "finished": inv.is_finished}
     finding = {"incident_type": "low_stock", "label": "low_stock", "product": product, "confidence": 1.0, "uncertain": False,
                "source": "stock_calculations", "status": st.status, "impact": impact,
-               "cause": fields.get("cause_text")}
+               "cause": fields.get("cause_text"), "stock_corrected": corrected}
     return {"finding": finding, "incident_kind": "low_stock", "mode": "incident", "rag_query": RAG_QUERY[product],
             "assessment": {"severity_level": sev, "urgency_level": urg, "rationale": [
                 f"{product} at {st.available:.0f} kg (≈{max(projected, 0):.0f} kg after the upstream loss): safety stock {st.safety_stock:.0f}, reorder point {st.reorder_point:.0f}",
                 f"{max(cover_eff, 0):.1f} days of cover vs {inv.lead_time_days:.0f} days to resupply"]
-            + ([fields["cause_text"], f"upstream loss will keep ≈{lost:.0f} kg from arriving"] if fields.get("cause_text") else [])},
+            + ([fields["cause_text"], f"upstream loss will keep ≈{lost:.0f} kg from arriving"] if fields.get("cause_text") else [])
+            + ([f"Your {corrected['product']} stock record was updated from {corrected['from']:.0f} to {corrected['to']:.0f} kg as you stated"] if corrected else [])},
             "_tools": ["postgres.stock", "calc.safety_stock", "calc.rop"],
             "_summary": f"{name}: {product} {st.status}, cover {st.days_of_cover:.1f} d; "
                         + (f"order {order_qty:.0f} kg" if not inv.is_finished else f"{impact['n_at_risk']}/{len(rows)} buyers at risk")}
 
 
-def stock_advisory(state) -> tuple[Advisory, str]:
+def stock_advisory(state):
     f, imp, risk, rag = state["finding"], state["supply_impact"], state.get("risk") or {}, state.get("rag") or {}
     s, product = imp["stock"], f["product"]
     steps: list[str] = []
+    if f.get("stock_corrected"):
+        c = f["stock_corrected"]
+        steps.append(f"As you said, your {c['product']} stock record was updated from {c['from']:.0f} kg to {c['to']:.0f} kg (logged in your ledger).")
     if imp["finished"]:
         for r in sorted(imp["affected"], key=lambda r: r["cover_days"]):
             steps.append(f"Serve {r['name']} first-come by urgency: it needs {r['need']:.0f} kg this week, you can allocate {r['allocated']:.0f} kg"
@@ -114,5 +135,5 @@ def stock_advisory(state) -> tuple[Advisory, str]:
     facts = {"headline": headline, "diagnosis": diag, "steps": steps, "risk": risk, "evidence": rag.get("points", [])}
     fb = lambda: Advisory(headline=f"{headline} - priority {risk.get('priority')}", diagnosis=diag, mitigation_steps=steps,
                           citations=sorted({p["citation"] for p in rag.get("points", [])}))
-    return structure(Advisory, "Write a short stock advisory using the given steps in meaning.", facts, fb,
-                     locked={"escalate": False, "escalation_reason": ""})
+    return produce(state, Advisory, "Write a short stock advisory using the given steps in meaning.", facts, fb,
+                   locked={"escalate": False, "escalation_reason": ""})

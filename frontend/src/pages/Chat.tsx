@@ -75,7 +75,7 @@ export default function Chat() {
               {itype === 'delivery_delay' && <><Num v={v1} set={setV1} ph="delay (days)" /><Num v={v2} set={setV2} ph="yarn delayed (kg)" /></>}
             </>)}
             {user?.role === 'spinner' && (<><span className="text-sm text-slate-500">Demand surge / new target</span><Num v={v1} set={setV1} ph="target yarn (kg)" /><Num v={v2} set={setV2} ph="within days" /></>)}
-            <button disabled={busy} className={`${btn.primary} ml-auto`}>{busy ? 'Analysing…' : 'Send'}</button>
+            <button disabled={busy} className={`${btn.primary} ml-auto`}>{busy ? 'Agents working…' : 'Send'}</button>
           </div>
           <div className="flex flex-wrap gap-2">{(PROMPTS[user?.role ?? ''] ?? []).map(p => (
             <button type="button" key={p} onClick={() => send(p)} className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:border-brand-500 hover:text-brand-700">{p}</button>))}</div>

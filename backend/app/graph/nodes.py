@@ -1,6 +1,8 @@
 """LangGraph nodes: intake, supervisor, specialists, RAG, risk, impact, advisory, finalize."""
 import re
 
+from app.agents.advisor import produce
+from app.agents.triage import diagnose_text, triage
 from app.calc.impact import farmer_impact
 from app.db.models import Entity, Incident, Notification
 from app.db.session import session_scope
@@ -10,7 +12,8 @@ from app.graph.stock_agent import looks_like_low_stock, low_stock_agent, stock_a
 from app.graph.profiles import (DISEASE_PROFILES, ESCALATE_LOSS, MIN_CONFIDENCE, SEVERITY, URGENCY,
                                 priority)
 from app.llm.schemas import Advisory, AnswerOut
-from app.llm.structured import structure
+from app.llm.provider import get_llm
+from app.llm.structured import structure  # noqa: F401
 from app.memory.incidents import recall, remember
 from app.rag.agentic import agentic_rag
 from app.vision.classifier import get_classifier, normalise_label
@@ -43,6 +46,17 @@ def intake(state):
     msg = (state.get("message") or "").strip()
     role = state["role"]
     kind = fields.get("incident_type")
+    structured_form = kind or any(k in fields for k in ("target_qty", "quantity_kg", "reduction_pct", "delay_days", "duration_days"))
+    if msg and not state.get("image_path") and not structured_form:
+        tri = triage(state)  # LLM reads the free text; None -> keyword rules below
+        if tri:
+            if tri["clarify"]:
+                return {"mode": "query", "message": msg, "fields": tri["fields"], "clarify": tri["clarify"],
+                        "advisory": {"type": "clarify", "question": tri["clarify"], "answer": tri["clarify"],
+                                     "headline": "I need a bit more detail", "structured_by": "agent"},
+                        "_tools": ["llm.triage"], "_summary": f"LLM triage: {tri['summary']}"}
+            return {"mode": tri["mode"], "message": msg, "fields": tri["fields"], "_tools": ["llm.triage"],
+                    "_summary": f"LLM triage: {tri['summary']}"}
     if kind != "low_stock" and not state.get("image_path") and looks_like_low_stock(msg):
         fields = {**fields, "incident_type": "low_stock"}  # "my cocoon stock is critical" -> stock incident
         kind = "low_stock"
@@ -122,6 +136,11 @@ def farmer_agent(crop: str):
         else:
             label, conf = match_symptoms(crop, state.get("message", ""))
             source = "text_symptoms"
+            labels = [l for l, pr in DISEASE_PROFILES.items() if pr.get("crop") == crop]
+            dx = diagnose_text(crop, state.get("message", ""), labels)  # LLM reads the symptom description
+            if dx is not None:
+                label, conf, source = dx[0], dx[1], "llm_symptoms"
+                tools.append("llm.diagnose")
         prof = DISEASE_PROFILES.get(label or "")
         known = prof is not None
         uncertain = (not known) or conf < MIN_CONFIDENCE
@@ -172,8 +191,9 @@ def rag_node(state):
         query, topics, hint = state.get("rag_query") or state.get("message"), None, ""
     if state.get("fields", {}).get("rag_query"):
         query = state["fields"]["rag_query"]
-    res = agentic_rag(query, topics=topics, hint=hint, intent=intent)
-    return {"rag": res.dict(), "_tools": ["chroma.retrieve", "rag.grade"],
+    llm_rag = state.get("mode") == "incident" and state.get("user_id") is not None and get_llm() is not None
+    res = agentic_rag(query, topics=topics, hint=hint, intent=intent, use_llm=llm_rag)
+    return {"rag": res.dict(), "_tools": ["chroma.retrieve", "llm.rag_grade" if res.graded_by == "llm" else "rag.grade"],
             "_summary": ("ABSTAINED" if res.abstained else f"{len(res.passages)} passages, conf {res.confidence:.2f}")
                         + f"; {len(res.queries_tried)} quer{'y' if len(res.queries_tried) == 1 else 'ies'}"}
 
@@ -253,24 +273,21 @@ def advisory_node(state):
                 return AnswerOut(answer="I could not find reliable information on this in the knowledge base. "
                                         "Please ask an expert or your local sericulture office.", abstained=True)
             return AnswerOut(answer=_short(points[0], 400), key_points=[_short(p, 300) for p in points[1:5]], citations=cites)
-        out, by = structure(AnswerOut, "Answer the user's question from the evidence only. If abstained is true, say you cannot answer.",
-                            facts, fb, locked={"abstained": bool(rag.get("abstained"))})
+        out, by, meta = produce(state, AnswerOut, "Answer the user's question. Search the knowledge base yourself if the evidence given is thin; if it cannot answer, abstain.",
+                                facts, fb, locked={"abstained": bool(rag.get("abstained"))}, agent_locked={})
         res = {"type": "answer", **out.model_dump(), "structured_by": by}
-        return {"advisory": res, "_tools": ["groq.structure" if by != "template" else "template.structure"],
-                "_summary": f"answer by {by}" + (" (abstained)" if res["abstained"] else "")}
+        return _adv(res, by, meta, f"answer by {by}" + (" (abstained)" if res["abstained"] else ""))
 
     if f.get("incident_type") == "low_stock":
-        out, by = stock_advisory(state)
+        out, by, meta = stock_advisory(state)
         res = {"type": "advisory", **out.model_dump(), "structured_by": by}
         _remember(state, res["headline"])
-        return {"advisory": res, "_tools": ["groq.structure" if by != "template" else "template.structure"],
-                "_summary": f"stock advisory by {by}"}
+        return _adv(res, by, meta, f"stock advisory by {by}")
     if state.get("route") in ("reeler", "spinner"):
-        out, by = ops_advisory(state)
+        out, by, meta = ops_advisory(state)
         res = {"type": "advisory", **out.model_dump(), "structured_by": by}
         _remember(state, res["headline"])
-        return {"advisory": res, "_tools": ["groq.structure" if by != "template" else "template.structure"],
-                "_summary": f"ops advisory by {by}"}
+        return _adv(res, by, meta, f"ops advisory by {by}")
     label = f.get("label")
     escalate = bool(imp.get("escalate"))
     uncertain = f.get("uncertain") or rag.get("abstained")
@@ -306,15 +323,25 @@ def advisory_node(state):
                         diagnosis=f"{pretty(label).title()} detected on {f['crop']} ({f['confidence']:.0%} confidence, "
                                   f"{f['affected_pct']:.0f}% affected). Severity {risk.get('severity')}, urgency {risk.get('urgency')}.",
                         mitigation_steps=steps, escalate=escalate, escalation_reason=reason, citations=cites, follow_up=follow)
-    out, by = structure(Advisory, "Write the farmer advisory: diagnosis, mitigation steps from evidence, whether to escalate to the reeler.",
-                        facts, fb, locked={"escalate": escalate and not f.get("uncertain"), "escalation_reason": reason})
+    out, by, meta = produce(state, Advisory, "Write the farmer advisory: diagnosis, mitigation steps from evidence, whether to escalate to the reeler.",
+                            facts, fb, locked={"escalate": escalate and not f.get("uncertain"), "escalation_reason": reason})
     if f.get("uncertain"):  # never let formatting hide the abstention
-        out = fb()
-        by = "template"
+        out, by, meta = fb(), "template", None
     res = {"type": "advisory", **out.model_dump(), "structured_by": by}
     _remember(state, res["headline"])
-    return {"advisory": res, "_tools": ["groq.structure" if by != "template" else "template.structure"],
-            "_summary": f"advisory by {by}; escalate={res['escalate']}"}
+    return _adv(res, by, meta, f"advisory by {by}; escalate={res['escalate']}")
+
+
+def _adv(res: dict, by: str, meta: dict | None, summary: str) -> dict:
+    """Node return for any advisory: attaches the agent's tool steps and the evidence it actually cited."""
+    tools = {"agent": ["llm.agent_loop", "llm.advisor"], "gemini": ["llm.grounded_answer[gemini]"], "groq": ["llm.structure[groq]"],
+             "groq_repaired": ["llm.structure[groq]"]}.get(by, ["template.structure"])
+    out = {"advisory": res, "_tools": tools + [f"agent.{s['tool']}" for s in (meta or {}).get("steps", [])], "_summary": summary}
+    if meta:
+        out["rag"] = meta["rag"]
+        out["_agent"] = meta["steps"]
+        out["_summary"] += f"; {len(meta['steps'])} tool call(s), {meta['searches']} KB search(es)"
+    return out
 
 
 def _remember(state, solution: str) -> None:
@@ -338,7 +365,9 @@ def finalize(state):
     if h.get("mitigation_steps"):
         solution += " | " + " ".join(f"{i + 1}) {s}" for i, s in enumerate(h["mitigation_steps"][:4]))
     out = state.get("outcome") or {}
-    if state["mode"] == "query":
+    if state.get("clarify"):
+        status = "needs_info"
+    elif state["mode"] == "query":
         status = "answered"
     elif state.get("deal_ids"):
         if out.get("executed"):

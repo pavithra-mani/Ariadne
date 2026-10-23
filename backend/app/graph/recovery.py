@@ -6,6 +6,7 @@ from datetime import date
 
 from langgraph.types import interrupt
 
+from app.agents.planner import choose_strategies, order_candidates
 from app.calc.impact import OUTPUT_PRODUCT, get_inv
 from app.calc.supply import stock_status
 from app.config import settings
@@ -53,9 +54,26 @@ def inventory_check(state):
             if case["qty"] <= 0.5:
                 case["status"] = "no_need"
             cases.append(case)
+    # planning agent: pick a sourcing strategy per case from real candidate statistics
+    stats = {}
+    with session_scope() as db:
+        for c in cases:
+            if c["status"] != "open":
+                continue
+            cands = find_candidates(db, c, RADII_KM[-1], {})
+            stats[c["idx"]] = {"candidates_within_150km": len(cands), "nearest_km": min((x["distance_km"] for x in cands), default=None),
+                               "cheapest_price_per_kg": min((x["unit_price"] for x in cands), default=None),
+                               "largest_offer_kg": max((x["offer"] for x in cands), default=None),
+                               "total_offered_kg": round(sum(x["offer"] for x in cands), 1),
+                               "buyer_balance": round(db.get(Entity, c["buyer_id"]).balance)}
+    plan = choose_strategies(cases, stats)
+    for c in cases:
+        c["strategy"], c["strategy_reason"] = plan[c["idx"]]
     open_n = len([c for c in cases if c["status"] == "open"])
-    return {"cases": cases, "search_count": 0, "plans": [], "_tools": ["postgres.stock"],
-            "_summary": f"{open_n} open recovery case(s) of {len(cases)}"}
+    llm_planned = any(r != "default price/distance balance" for _, r in plan.values())
+    return {"cases": cases, "search_count": 0, "plans": [], "_tools": ["postgres.stock"] + (["llm.planner"] if llm_planned else []),
+            "_summary": f"{open_n} open recovery case(s) of {len(cases)}; strategy: "
+                        + ", ".join(f"#{c['idx']} {c['strategy']}" for c in cases if c["status"] == "open")}
 
 
 # ------------------------------------------------------------------ 2 alternative sources
@@ -128,7 +146,7 @@ def alt_sources(state):
                 c["exhausted"] = True
                 continue
             c["radius_idx"], c["prev_n"] = idx, len(cands)
-            sel = select(cands, c["qty"])
+            sel = select(order_candidates(cands, c.get("strategy")), c["qty"])
             c["current"] = {"attempt": k, "radius_km": RADII_KM[idx], "n_candidates": len(cands), "selection": sel,
                             "covered": round(sum(s["take"] for s in sel), 1)}
             radius = RADII_KM[idx]
@@ -243,7 +261,7 @@ def propose(state):
                                    "reason": f"only {best['covered_routed']:.0f} of {c['qty']:.0f} kg could be sourced and routed in {state.get('search_count', 0)} searches"})
     summary = [{"idx": c["idx"], "buyer_name": c["buyer_name"], "product": c["product"], "qty": c["qty"], "direction": c["direction"],
                 "status": c["status"], "covered": c.get("covered", 0), "attempts": c["attempts"], "deals": c.get("deals", []),
-                "approver": c["buyer_name"]}
+                "approver": c["buyer_name"], "strategy": c.get("strategy"), "strategy_reason": c.get("strategy_reason")}
                for c in cases]
     return {"cases": cases, "deal_ids": deal_ids, "plans": summary, "outcome": {**(state.get("outcome") or {}), "unresolved": unresolved},
             "_tools": ["postgres.deals"], "_summary": f"{len(deal_ids)} deal(s) proposed, {len(unresolved)} unresolved"}

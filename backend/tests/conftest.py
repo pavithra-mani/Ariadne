@@ -4,7 +4,24 @@ from fastapi.testclient import TestClient
 from app.db.models import Base
 from app.db.seed import reseed_data
 from app.db.session import engine, ensure_schema
+from app.config import settings
+from app.llm.provider import set_llm_override
 from app.main import app
+
+
+@pytest.fixture(scope="session", autouse=True)
+def no_real_llm():
+    """The suite must never spend the real Gemini/Groq quota (the dev .env holds live keys)."""
+    settings.gemini_api_key = ""
+    settings.groq_api_key = ""
+    yield
+
+
+@pytest.fixture(autouse=True)
+def reset_llm():
+    set_llm_override(None)
+    yield
+    set_llm_override(None)
 
 
 @pytest.fixture(scope="session", autouse=True)

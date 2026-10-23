@@ -16,9 +16,11 @@ export default function System() {
     <div>
       <PageHeader title="System" subtitle="What is live and what is still a stand-in." />
       <Card>
+        {row('Gemini agents', s.llm?.gemini ? <Badge tone="ok">live · {s.llm.model}</Badge> : <Badge tone="reorder">off (rule-based fallback)</Badge>)}
+        {s.llm?.gemini && row('LLM calls this session', `${s.llm.ok} ok · ${s.llm.rate_limited} rate-limited · ${s.llm.retried} retried · ${s.llm.failed} failed · ${s.llm.fallbacks} fallbacks · ${s.llm.tokens_in + s.llm.tokens_out} tokens`)}
         {row('Groq structuring', s.groq ? <Badge tone="ok">live</Badge> : <Badge tone="reorder">template fallback (no API key)</Badge>)}
         {row('LangSmith tracing', s.langsmith ? <Badge tone="ok">on</Badge> : <Badge tone="slate">off · local trace only</Badge>)}
-        {Object.entries(s.classifiers).map(([c, v]) => row(`${c} disease classifier`, v === 'model' ? <Badge tone="ok">trained model</Badge> : <Badge tone="reorder">stub</Badge>))}
+        {Object.entries(s.classifiers).map(([c, v]) => row(`${c} disease classifier`, v === 'model' ? <Badge tone="ok">trained model</Badge> : v === 'gemini' ? <Badge tone="violet">Gemini vision (stand-in)</Badge> : <Badge tone="reorder">stub</Badge>))}
         {row('Knowledge base chunks', s.knowledge_chunks)}
         {row('Max alternative-source searches', s.max_searches)}
         {row('LLM calls (groq / repaired / template)', `${s.llm_stats.groq_ok} / ${s.llm_stats.repaired} / ${s.llm_stats.fallback}`)}

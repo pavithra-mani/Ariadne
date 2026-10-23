@@ -79,7 +79,7 @@ def judge(question: str, text: str, checklist: list[str]) -> tuple[float, float,
         return JudgeOut(completeness=round(comp, 2), relevance=round(rel, 2))
     out, by = structure(JudgeOut, "Score 0-1: completeness against the checklist elements, and relevance of the answer to the question.",
                         {"question": question, "answer": text, "checklist": checklist}, fb)
-    return out.completeness, out.relevance, "groq" if by.startswith("groq") else "heuristic"
+    return out.completeness, out.relevance, "llm" if by != "template" else "heuristic"
 
 
 def retrieval_scores(question: str, relevant_sources: list[str], k: int = 5) -> tuple[float, float]:

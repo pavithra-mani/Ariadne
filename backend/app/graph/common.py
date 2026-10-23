@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from app.db.models import Incident
 from app.db.session import session_scope
+from app.llm.provider import take_calls
 
 
 def traced(name: str, kind: str = "node"):
@@ -16,7 +17,8 @@ def traced(name: str, kind: str = "node"):
             out = dict(out)
             entry = {"node": name, "kind": kind, "ms": round((time.perf_counter() - t0) * 1000),
                      "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                     "summary": out.pop("_summary", ""), "tools": out.pop("_tools", [])}
+                     "summary": out.pop("_summary", ""), "tools": out.pop("_tools", []),
+                     "agent": out.pop("_agent", []), "llm": take_calls()}
             out["trace"] = [entry]
             return out
         return wrapper

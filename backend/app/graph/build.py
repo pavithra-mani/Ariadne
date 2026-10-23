@@ -15,7 +15,7 @@ def build_graph(checkpointer=None):
         g.add_node(name, getattr(nodes, name))
     g.add_node("stock_monitor_agent", nodes.low_stock_agent)
     g.add_edge(START, "intake")
-    g.add_edge("intake", "supervisor")
+    g.add_conditional_edges("intake", lambda s: "finalize" if s.get("clarify") else "supervisor", ["supervisor", "finalize"])
     g.add_conditional_edges("supervisor", nodes.route_after_supervisor,
                             ["mulberry_agent", "silkworm_agent", "reeler_agent", "spinner_agent", "stock_monitor_agent"])
     for agent in ("mulberry_agent", "silkworm_agent", "reeler_agent", "spinner_agent", "stock_monitor_agent"):

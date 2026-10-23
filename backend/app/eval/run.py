@@ -1,6 +1,7 @@
 """Evaluation harness (design doc section 5).
 
-    python -m app.eval.run --reset        # WIPES demo data, reseeds, runs all scenarios, writes a report
+    python -m app.eval.run --reset            # WIPES demo data; evaluates the Gemini agents (default when a key is set)
+    python -m app.eval.run --reset --rules    # same scenarios on the rule-based fallback path (no LLM, deterministic)
 
 Results: data/eval/results/baseline_<timestamp>.json  (+ printed table). Target thresholds are meant
 to be fixed after a first baseline run, as stated in the design.
@@ -217,7 +218,15 @@ def main():
     if "--reset" not in sys.argv:
         print("This run WIPES the demo database and reseeds it. Re-run with --reset to confirm.")
         sys.exit(2)
+    from app.config import settings
+    # The agentic system is the product, so it is what gets evaluated by default (when a key is configured).
+    # --rules switches the LLM off for a deterministic, free baseline of the rule-based fallback path.
+    use_llm = "--rules" not in sys.argv and bool(settings.gemini_api_key)
+    if not use_llm:
+        settings.gemini_api_key = ""
+        settings.groq_api_key = ""
     from app.main import app
+    print(f"LLM agents: {'ON (Gemini)' if use_llm else 'off (rule-based path)'}", flush=True)
     print("Reseeding...", flush=True)
     reseed_data()
     m, rows = Counter(), []
@@ -228,10 +237,10 @@ def main():
         print("Question set:", flush=True)
         judge_kind = run_qa(api, m, rows)
     rep = report(m, judge_kind)
-    out = {"created": datetime.now().isoformat(timespec="seconds"), "groq": groq_enabled(), "judge": judge_kind,
+    out = {"created": datetime.now().isoformat(timespec="seconds"), "groq": groq_enabled(), "llm_agents": use_llm, "judge": judge_kind,
            "metrics": rep, "counts": dict(m), "rows": rows}
     RESULTS.mkdir(parents=True, exist_ok=True)
-    path = RESULTS / f"baseline_{datetime.now():%Y%m%d_%H%M%S}.json"
+    path = RESULTS / f"{'agents' if use_llm else 'rules'}_{datetime.now():%Y%m%d_%H%M%S}.json"
     path.write_text(json.dumps(out, indent=2, default=str))
     print("\n=== Ariadne evaluation (Table 5) ===")
     for group, ms in rep.items():

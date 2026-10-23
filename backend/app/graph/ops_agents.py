@@ -12,7 +12,7 @@ from app.db.session import session_scope
 from app.graph.common import traced
 from app.graph.profiles import COCOON_PER_YARN, HORIZON_DAYS, SEVERITY, URGENCY
 from app.llm.schemas import Advisory
-from app.llm.structured import structure
+from app.agents.advisor import produce
 
 REELER_KINDS = {"low_yarn_output": "low_yarn", "cocoon_shortage": "cocoon_shortage", "delivery_delay": "delay"}
 
@@ -218,7 +218,7 @@ def _spinner_shortfall(state, fields):
 
 
 # ------------------------------------------------------------------ advisory for ops roles
-def ops_advisory(state) -> tuple[Advisory, str]:
+def ops_advisory(state):
     f, imp, risk, rag = state["finding"], state["supply_impact"], state.get("risk") or {}, state.get("rag") or {}
     points = [p["text"] for p in rag.get("points", [])][:3]
     steps: list[str] = []
@@ -252,5 +252,5 @@ def ops_advisory(state) -> tuple[Advisory, str]:
              "risk": risk, "evidence": rag.get("points", [])}
     fb = lambda: Advisory(headline=headline, diagnosis=diagnosis, mitigation_steps=steps,
                           citations=sorted({p["citation"] for p in rag.get("points", [])}))
-    return structure(Advisory, "Write the operational advisory using the given steps verbatim in meaning.", facts, fb,
-                     locked={"escalate": False, "escalation_reason": ""})
+    return produce(state, Advisory, "Write the operational advisory using the given steps verbatim in meaning.", facts, fb,
+                   locked={"escalate": False, "escalation_reason": ""})

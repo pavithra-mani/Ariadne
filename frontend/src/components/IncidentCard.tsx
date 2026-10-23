@@ -32,12 +32,12 @@ export default function IncidentCard({ inc, onOpen, onClose }: { inc: any; onOpe
           <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white ${pri.chip}`}>{inc.priority}</div>
           <div className="min-w-0 flex-1">
             <div className="text-base font-semibold text-ink">{(adv?.headline ?? human(inc.kind)).replace(/ - priority P\d/, '')}</div>
-            <div className="mt-0.5 text-slate-600">{pri.word} · {inc.severity} severity · {inc.urgency} urgency</div>
+            <div className="mt-0.5 text-slate-600">{pri.word} · {inc.severity} severity · {inc.urgency} urgency{adv?.structured_by === 'agent' && <span className="ml-2 text-xs text-slate-500">· 🤖 Gemini agent</span>}</div>
           </div>
           <div className="text-right text-xs text-slate-500"><div>Incident #{inc.id}</div><div className="mt-1"><Badge tone="violet">{human(inc.status)}</Badge></div></div>
         </div>
       ) : (
-        <div className="flex items-center justify-between text-xs text-slate-400"><span>#{inc.id} · {human(inc.status)}</span>{adv?.structured_by && <span>formatted by {adv.structured_by}</span>}</div>
+        <div className="flex items-center justify-between text-xs text-slate-400"><span>#{inc.id} · {human(inc.status)}</span>{adv?.structured_by && <span>{adv.structured_by === 'agent' ? '🤖 answered by the Gemini agent' : `formatted by ${adv.structured_by}`}</span>}</div>
       )}
 
       {f?.cause && (
@@ -65,10 +65,19 @@ export default function IncidentCard({ inc, onOpen, onClose }: { inc: any; onOpe
         <Block title="Why this priority"><ul className="list-disc space-y-1 pl-5 text-slate-600">{risk.rationale.map((r: string, i: number) => <li key={i}>{r}</li>)}</ul></Block>
       )}
 
+      {adv?.type === 'clarify' && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-900">
+          <div className="text-xs font-semibold uppercase tracking-wide text-sky-600">Ariadne needs a bit more detail</div>
+          <p className="mt-1 text-base font-medium">{adv.question}</p>
+          <p className="mt-1 text-xs text-sky-700">Reply in the box above; nothing was assumed and no deals were proposed.</p>
+        </div>
+      )}
+
       {adv?.type === 'advisory' && (
         <Block title="What to do">
           <p className="mb-3 text-slate-600">{adv.diagnosis}</p>
-          <ol className="list-decimal space-y-1.5 pl-5 text-slate-700">{adv.mitigation_steps.map((s: string, i: number) => <li key={i}>{s}</li>)}</ol>
+          <ol className="list-decimal space-y-1.5 pl-5 text-slate-700">{adv.mitigation_steps.map((s: string, i: number) => (
+            <li key={i}>{s}{adv.ungrounded_steps?.includes(i) && <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 ring-1 ring-amber-200">general advice, not found in the sources</span>}</li>))}</ol>
           {adv.follow_up?.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-slate-500">{adv.follow_up.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>}
           {adv.escalate && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-red-800"><b>{inc.role === 'mulberry_farm' ? 'Escalated: the silkworm farmers you supply were alerted.' : 'Escalated: your reelers were alerted.'}</b> {adv.escalation_reason}</div>}
         </Block>
@@ -110,6 +119,7 @@ export default function IncidentCard({ inc, onOpen, onClose }: { inc: any; onOpe
                 <Badge tone={c.status === 'resolved' ? 'ok' : c.status === 'partial' ? 'reorder' : 'critical'}>{c.status === 'resolved' ? 'fully sourced' : c.status}</Badge>
                 <span className="text-xs text-slate-400">{c.covered} kg covered · {c.attempts.length} of max 5 searches</span>
               </div>
+              {c.strategy && <div className="mt-1.5 text-xs text-slate-500"><Badge tone="violet">strategy: {c.strategy.replace('_', ' ')}</Badge> {c.strategy_reason}</div>}
               <ol className="mt-1.5 space-y-0.5 text-xs text-slate-500">{c.attempts.map((a: any) => (
                 <li key={a.attempt}>Search {a.attempt}: within {a.radius_km} km → {a.n_candidates} candidate(s), {a.covered_routed} kg routable over {a.total_km} km</li>))}</ol>
             </div>))}</div>
@@ -144,7 +154,10 @@ export default function IncidentCard({ inc, onOpen, onClose }: { inc: any; onOpe
         <details><summary className="text-xs font-medium text-brand-600">How Ariadne got here · agent trace ({inc.trace.length} steps)</summary>
           <ol className="mt-3 space-y-2 border-l-2 border-brand-100 pl-4">{inc.trace.map((t: any, i: number) => (
             <li key={i} className="text-xs"><b className="text-slate-700">{human(t.node)}</b> <span className="text-slate-400">{t.ms} ms</span>
-              <div className="text-slate-500">{t.summary}{t.tools?.length > 0 && <span className="text-brand-600"> · tools: {t.tools.join(', ')}</span>}</div></li>))}</ol></details>)}
+              <div className="text-slate-500">{t.summary}{t.tools?.length > 0 && <span className="text-brand-600"> · tools: {t.tools.join(', ')}</span>}</div>
+              {t.llm?.length > 0 && <div className="mt-0.5 text-violet-700">🤖 {t.llm.map((c: any) => `${c.purpose} · ${c.model} · ${(c.ms / 1000).toFixed(1)}s`).join('  ›  ')}</div>}
+              {t.agent?.length > 0 && <ol className="mt-1 space-y-0.5 border-l border-violet-200 pl-3">{t.agent.map((a: any, j: number) => (
+                <li key={j} className="text-slate-600"><span className="font-medium text-violet-700">{a.tool}</span>({Object.values(a.args).map(String).join(', ').slice(0, 60)}) <span className="text-slate-400">→ {String(a.result).slice(0, 90)}</span></li>))}</ol>}</li>))}</ol></details>)}
     </div>
   )
 }

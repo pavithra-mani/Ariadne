@@ -1,0 +1,442 @@
+{
+  "created": "2026-10-23T10:05:59",
+  "groq": false,
+  "llm_agents": false,
+  "judge": "heuristic",
+  "metrics": {
+    "A. Agent workflow and tool behaviour": {
+      "Task Completion Rate": 100.0,
+      "Supervisor Routing Accuracy": 100.0,
+      "Tool Selection Accuracy": 100.0,
+      "Structured Output Validity": 100.0,
+      "Tool Execution Success Rate": 100.0,
+      "Handoff Accuracy": 100.0,
+      "Unnecessary Tool Call Rate": 2.2,
+      "Workflow Termination Accuracy": 100.0
+    },
+    "B. Answer quality": {
+      "Answer Correctness": 92.9,
+      "Completeness (judge: heuristic)": 71.4,
+      "Relevance (judge: heuristic)": 82.9
+    },
+    "C. Retrieval and grounding": {
+      "Groundedness / Faithfulness": 98.4,
+      "Citation Accuracy": 100.0,
+      "Retrieval Recall@5": 75.5,
+      "Context Precision@5": 72.9
+    },
+    "D. Safe handling of uncertainty": {
+      "Abstention Accuracy": 88.9,
+      "Hallucination Rate": 1.6
+    }
+  },
+  "counts": {
+    "tasks": 18,
+    "task_completed": 18,
+    "route_tests": 18,
+    "route_ok": 18,
+    "tool_tests": 18,
+    "tool_ok": 18,
+    "out_valid": 51,
+    "out_checked": 51,
+    "handoff_tests": 18,
+    "handoff_ok": 18,
+    "tool_attempts": 127,
+    "tool_success": 127,
+    "calls_total": 180,
+    "term_tests": 18,
+    "term_ok": 18,
+    "abst_tests": 9,
+    "abst_ok": 8,
+    "calls_unnecessary": 4,
+    "qa_tests": 14,
+    "qa_correct": 13,
+    "claims": 62,
+    "claims_supported": 61,
+    "cites": 65,
+    "cites_ok": 65,
+    "recall_sum": 10.567,
+    "prec_sum": 10.2,
+    "recall_n": 14,
+    "comp_sum": 10.0,
+    "rel_sum": 11.61
+  },
+  "rows": [
+    {
+      "id": "F1 silkworm grasserie photo",
+      "status": "advised",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.5
+    },
+    {
+      "id": "F2 silkworm flacherie text only",
+      "status": "advised",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.4
+    },
+    {
+      "id": "F3 mulberry mild mildew",
+      "status": "advised",
+      "priority": "P4",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.4
+    },
+    {
+      "id": "F4 mulberry severe blight",
+      "status": "advised",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.8
+    },
+    {
+      "id": "F5 healthy leaf is not an incident",
+      "status": "answered",
+      "priority": null,
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.4
+    },
+    {
+      "id": "F6 blurry photo -> expert referral",
+      "status": "advised",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true,
+        "abstained": true
+      },
+      "seconds": 0.4
+    },
+    {
+      "id": "R1 low yarn output (factory)",
+      "status": "awaiting_approval",
+      "priority": "P2",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 2.6
+    },
+    {
+      "id": "R2 cocoon shortage",
+      "status": "awaiting_approval",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 3.9
+    },
+    {
+      "id": "R3 minor delay",
+      "status": "advised",
+      "priority": "P4",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.5
+    },
+    {
+      "id": "R4 zero yarn stock",
+      "status": "advised",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 2.3
+    },
+    {
+      "id": "R5 cocoon stock critical (stock trigger) -> approve",
+      "status": "awaiting_approval",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "final_status": "resolved",
+      "seconds": 1.8
+    },
+    {
+      "id": "S1 demand surge -> approve",
+      "status": "awaiting_approval",
+      "priority": "P2",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "final_status": "resolved",
+      "seconds": 1.3
+    },
+    {
+      "id": "S2 demand surge -> reject",
+      "status": "awaiting_approval",
+      "priority": "P2",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "final_status": "rejected",
+      "seconds": 1.3
+    },
+    {
+      "id": "S3 small target met",
+      "status": "advised",
+      "priority": "P4",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.4
+    },
+    {
+      "id": "S4 impossible target (no source in 5 searches)",
+      "status": "awaiting_approval",
+      "priority": "P1",
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true,
+        "abstained": true
+      },
+      "seconds": 0.8
+    },
+    {
+      "id": "Q1 farmer knowledge question",
+      "status": "answered",
+      "priority": null,
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.2
+    },
+    {
+      "id": "Q2 reeler knowledge question",
+      "status": "answered",
+      "priority": null,
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true
+      },
+      "seconds": 0.2
+    },
+    {
+      "id": "Q3 out-of-scope question",
+      "status": "answered",
+      "priority": null,
+      "checks": {
+        "completed": true,
+        "routing": true,
+        "tool_selection": true,
+        "handoff": true,
+        "termination": true,
+        "abstained": true
+      },
+      "seconds": 0.3
+    },
+    {
+      "id": "QA What are the symptoms of powdery mildew on mulberr",
+      "correct": true,
+      "claims": 4,
+      "supported": 3,
+      "recall@5": 0.5,
+      "precision@5": 0.8
+    },
+    {
+      "id": "QA How do I manage grasserie in silkworms?",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 0.5,
+      "precision@5": 0.6
+    },
+    {
+      "id": "QA What causes flacherie in silkworm larvae?",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 0.5,
+      "precision@5": 1.0
+    },
+    {
+      "id": "QA How is pebrine transmitted?",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 0.67,
+      "precision@5": 0.8
+    },
+    {
+      "id": "QA What is muscardine and how does it look?",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 1.0,
+      "precision@5": 0.8
+    },
+    {
+      "id": "QA Can I feed silkworms leaves that were sprayed with",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 0.4,
+      "precision@5": 0.4
+    },
+    {
+      "id": "QA How should fresh cocoons be stored?",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 1.0,
+      "precision@5": 1.0
+    },
+    {
+      "id": "QA What temperature do late-age silkworm larvae need?",
+      "correct": false,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 0.67,
+      "precision@5": 1.0
+    },
+    {
+      "id": "QA How many kilograms of cocoons are needed for one k",
+      "correct": true,
+      "claims": 4,
+      "supported": 4,
+      "recall@5": 0.67,
+      "precision@5": 1.0
+    },
+    {
+      "id": "QA How should raw silk yarn be stored?",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 1.0,
+      "precision@5": 0.8
+    },
+    {
+      "id": "QA What should a reeler do when a yarn delivery is de",
+      "correct": true,
+      "claims": 5,
+      "supported": 5,
+      "recall@5": 1.0,
+      "precision@5": 0.4
+    },
+    {
+      "id": "QA What should a spinner do when demand or the target",
+      "correct": true,
+      "claims": 2,
+      "supported": 2,
+      "recall@5": 1.0,
+      "precision@5": 0.4
+    },
+    {
+      "id": "QA When should a farmer escalate to the reeler?",
+      "correct": true,
+      "claims": 3,
+      "supported": 3,
+      "recall@5": 1.0,
+      "precision@5": 0.2
+    },
+    {
+      "id": "QA What causes leaf spot in mulberry?",
+      "correct": true,
+      "claims": 4,
+      "supported": 4,
+      "recall@5": 0.67,
+      "precision@5": 1.0
+    },
+    {
+      "id": "OOD What is the price of raw silk in Japan today?",
+      "abstained": false
+    },
+    {
+      "id": "OOD How do I treat dengue fever?",
+      "abstained": true
+    },
+    {
+      "id": "OOD Who is the prime minister of Canada?",
+      "abstained": true
+    },
+    {
+      "id": "OOD Which mobile phone should I buy for my farm?",
+      "abstained": true
+    },
+    {
+      "id": "OOD How do I bake sourdough bread?",
+      "abstained": true
+    },
+    {
+      "id": "OOD What will the weather be in Paris tomorrow?",
+      "abstained": true
+    }
+  ]
+}

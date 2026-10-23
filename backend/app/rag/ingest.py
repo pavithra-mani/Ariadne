@@ -32,19 +32,35 @@ def read_doc(path: Path) -> tuple[dict, str]:
     return meta, text
 
 
+GENERIC = {"symptoms", "management", "control", "prevention", "treatment", "cause", "causes", "source of infection", "sources of infection",
+           "spread of the disease", "early stage of infection", "later stage of infection", "physical", "chemical", "biological",
+           "egg stage", "larval stage", "moth stage", "mode of spread", "damage", "life cycle", "description", "nature of damage"}
+
+
 def chunk(text: str) -> list[str]:
-    """Split on markdown headings/paragraphs, then pack to ~CHUNK_CHARS with overlap.
-    Each chunk keeps its heading so retrieved text is self-describing."""
-    sections, heading, buf = [], "", []
+    """Split on headings, then pack to ~CHUNK_CHARS with overlap. Scraped documents flatten heading levels
+    ('Grasserie' and its 'Symptoms' are both '##'), so generic sub-headings inherit the parent disease/pest
+    heading and any 'Diseases and pests of ...' group heading: 'Symptoms' alone would be unsearchable."""
+    sections, ctx, buf = [], "", []
+    group = parent = ""
     for line in text.splitlines():
         if line.startswith("#"):
             if buf:
-                sections.append((heading, "\n".join(buf).strip()))
-            heading, buf = line.lstrip("# ").strip(), []
+                sections.append((ctx, "\n".join(buf).strip()))
+            h = line.lstrip("# ").strip().rstrip(":")
+            if h.lower().startswith("diseases and pests of"):
+                group, parent = h, ""
+                ctx = h
+            elif h.lower() in GENERIC and parent:
+                ctx = " > ".join(x for x in (group, parent, h) if x)
+            else:
+                parent = h
+                ctx = " > ".join(x for x in (group, h) if x and x != h) + (" > " if group and group != h else "") + h if group else h
+            buf = []
         elif not line.startswith(">"):  # skip placeholder banner
             buf.append(line)
     if buf:
-        sections.append((heading, "\n".join(buf).strip()))
+        sections.append((ctx, "\n".join(buf).strip()))
     out = []
     for h, body in sections:
         if not body:
@@ -72,7 +88,7 @@ def ingest(reset: bool = False, kb_dir: Path = KB_DIR) -> int:
             continue
         ids = [hashlib.md5(f"{path}:{i}:{c}".encode()).hexdigest() for i, c in enumerate(chunks)]
         col.upsert(ids=ids, documents=chunks, metadatas=[
-            {"title": meta["title"], "source": meta["source"], "origin": meta.get("origin", ""),
+            {"title": meta["title"], "source": meta["source"], "origin": meta.get("origin", ""), "publisher": meta.get("publisher", ""),
              "topic": topic, "chunk": i}
             for i in range(len(chunks))])
         n += len(chunks)

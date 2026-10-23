@@ -4,12 +4,14 @@ import uuid
 
 from app.db.models import Incident
 from app.db.session import session_scope
+from app.llm.provider import start_budget
 
 log = logging.getLogger("ariadne.runner")
 
 
 def start_incident(role: str, entity_id: int, user_id: int | None, message: str, fields: dict,
                    image_path: str | None = None, parent_id: int | None = None) -> int:
+    start_budget()  # one LLM-call budget per user request; child incidents share it
     with session_scope() as db:
         inc = Incident(thread_id=uuid.uuid4().hex, role=role, entity_id=entity_id, message=message,
                        image_path=image_path, parent_id=parent_id, payload={"input_fields": fields})
