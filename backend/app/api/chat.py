@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.models import Entity, Incident, User
 from app.db.session import get_db
-from app.graph.runner import start_incident
+from app.graph.runner import start_incident_background
 from app.security import current_user
 from app.visibility.scope import visible_entities
 
@@ -99,7 +99,7 @@ async def chat(message: str = Form(""), fields: str = Form("{}"), image: UploadF
     path = await save_upload(image)
     if not message.strip() and not path and not fields_d.get("incident_type"):
         raise HTTPException(400, "Send a message, a photo or a structured report")
-    inc_id = start_incident(user.role, user.entity_id, user.id, message.strip(), fields_d, path)
+    inc_id = start_incident_background(user.role, user.entity_id, user.id, message.strip(), fields_d, path)
     inc = db.get(Incident, inc_id)
     db.refresh(inc)
     out = incident_out(inc, full=True)

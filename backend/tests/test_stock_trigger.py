@@ -1,6 +1,8 @@
 """A product pushed to its reorder point / safety stock makes Ariadne act by itself."""
 import json
 
+from conftest import decide_deals
+
 import pytest
 
 from app.calc.impact import get_inv
@@ -37,8 +39,7 @@ def test_reeler_cocoon_critical_opens_incident_with_deals_to_approve(client, aut
     assert pend and all(d["product"] == "cocoon" and d["can_decide"] and d["seller"]["name"].startswith("SF-") for d in pend)
     assert all(d["route"]["routes"] for d in pend)
     before = inv_of("reeler1", "cocoon")
-    for d in pend:
-        out = client.post(f"/api/deals/{d['id']}/decision", headers=h, json={"approve": True}).json()
+    out = decide_deals(client, auth, [d["id"] for d in pend])
     assert out["graph_resumed"]
     after = inv_of("reeler1", "cocoon")
     bought = sum(d["quantity"] for d in pend)

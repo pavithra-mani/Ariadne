@@ -2,6 +2,7 @@
 a flagged stub keeps the system runnable until then."""
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -12,8 +13,9 @@ from app.config import DATA_DIR
 
 MODEL_DIR = DATA_DIR / "models"
 
+# Labels for the stub / Gemini fallback only; the real models carry their own label order in <crop>.json.
 DEFAULT_LABELS = {
-    "mulberry": ["healthy", "leaf_rust", "leaf_spot", "powdery_mildew", "leaf_blight", "mosaic_virus"],
+    "mulberry": ["healthy", "leaf_rust", "leaf_spot", "stem_canker", "powdery_mildew", "root_knot", "leaf_blight", "mosaic_virus"],
     "silkworm": ["healthy", "grasserie", "flacherie", "muscardine", "pebrine"],
 }
 
@@ -54,6 +56,8 @@ class StubClassifier:
             digest = int(hashlib.md5(Path(image_path).read_bytes()).hexdigest(), 16)
             return Prediction(self.crop, self.labels[1 + digest % (len(self.labels) - 1)], 0.31,
                               [(self.labels[1], 0.31), (self.labels[2], 0.28)], "stub", True)
+        if "unspecified" in name and self.crop == "silkworm":  # test hook: image says "diseased, type unknown"
+            return Prediction(self.crop, "silkworm_disease_unspecified", 0.9, [("silkworm_disease_unspecified", 0.9), ("healthy", 0.06), ("grasserie", 0.04)], "stub", True)
         hit = next((l for l in self.labels if l in name or l.replace("_", "") in name.replace("_", "")), None)
         if hit:
             label, conf = hit, 0.9
@@ -65,6 +69,13 @@ class StubClassifier:
 
 
 class OnnxClassifier:
+    """Runs an exported model. <crop>.json keys:
+      labels, input_size, mean, std, layout (NCHW|NHWC)
+      resample   nearest | bilinear | bicubic (must match training; default bicubic)
+      output     "logits" (default: softmax is applied) | "probs" (model already outputs probabilities, e.g. sigmoid heads)
+      min_margin for multi-label/sigmoid heads: when the top score beats the runner-up by less than this, the model is
+                 not really choosing a class, so confidence is capped at `uncertain_cap` (below MIN_CONFIDENCE ->
+                 the incident is routed to "ask an expert" instead of acting on a coin-flip)."""
     def __init__(self, crop: str, model: Path, cfg: dict):
         import onnxruntime as ort
         self.crop = crop
@@ -76,19 +87,27 @@ class OnnxClassifier:
         import numpy as np
         from PIL import Image
         size = self.cfg.get("input_size", 224)
-        img = Image.open(image_path).convert("RGB").resize((size, size))
+        resample = {"nearest": Image.NEAREST, "bilinear": Image.BILINEAR, "bicubic": Image.BICUBIC}[self.cfg.get("resample", "bicubic")]
+        img = Image.open(image_path).convert("RGB").resize((size, size), resample)   # same resampling as at training time
         x = np.asarray(img, dtype=np.float32) / 255.0
         x = (x - np.array(self.cfg.get("mean", [0.485, 0.456, 0.406]), dtype=np.float32)) / \
             np.array(self.cfg.get("std", [0.229, 0.224, 0.225]), dtype=np.float32)
         if self.cfg.get("layout", "NCHW") == "NCHW":
             x = x.transpose(2, 0, 1)
         x = x[None].astype(np.float32)
-        logits = self.session.run(None, {self.session.get_inputs()[0].name: x})[0][0]
-        e = np.exp(logits - logits.max())
-        probs = e / e.sum()
+        out = self.session.run(None, {self.session.get_inputs()[0].name: x})[0][0].astype(np.float64)
+        if self.cfg.get("output", "logits") == "probs":
+            probs = out
+        else:
+            e = np.exp(out - out.max())
+            probs = e / e.sum()
         order = probs.argsort()[::-1]
         top = [(normalise_label(self.labels[i]), float(probs[i])) for i in order[:3]]
-        return Prediction(self.crop, top[0][0], top[0][1], top, "onnx", False)
+        conf = top[0][1]
+        margin = self.cfg.get("min_margin")
+        if margin and len(top) > 1 and top[0][1] - top[1][1] < margin:
+            conf = min(conf, self.cfg.get("uncertain_cap", 0.45))
+        return Prediction(self.crop, top[0][0], conf, top, "onnx", False)
 
 
 class GeminiVisionClassifier:
@@ -119,13 +138,19 @@ class GeminiVisionClassifier:
 
 @lru_cache
 def get_classifier(crop: str) -> DiseaseClassifier:
-    model, cfg_path = MODEL_DIR / f"{crop}.onnx", MODEL_DIR / f"{crop}.json"
+    """Order: ARIADNE_CLASSIFIER=stub (tests) -> trained ONNX model -> Gemini vision (DISEASE_FALLBACK=gemini) -> stub."""
+    if os.environ.get("ARIADNE_CLASSIFIER") == "stub":
+        return StubClassifier(crop)
+    variant = os.environ.get("ARIADNE_MODEL_VARIANT", "")  # "legacy": the team's original Keras models, for the ablation only
+    stem = f"{crop}_{variant}" if variant else crop
+    model, cfg_path = MODEL_DIR / f"{stem}.onnx", MODEL_DIR / f"{stem}.json"
     if model.exists() and cfg_path.exists():
         try:
             return OnnxClassifier(crop, model, json.loads(cfg_path.read_text()))
         except Exception as exc:  # bad model must not take the service down
-            print(f"[vision] could not load {model.name}: {exc}; using stub")
+            print(f"[vision] could not load {model.name}: {exc}; using fallback")
     from app.config import settings
     if settings.disease_fallback == "gemini":
         return GeminiVisionClassifier(crop)
+    print(f"[vision] no trained {crop} model in {MODEL_DIR}: using the file-name STUB (demo/tests only)")
     return StubClassifier(crop)

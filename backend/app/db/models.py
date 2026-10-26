@@ -109,7 +109,7 @@ class Deal(Base):
     __tablename__ = "deals"
     id: Mapped[int] = mapped_column(primary_key=True)
     incident_id: Mapped[int | None] = mapped_column(ForeignKey("incidents.id"), nullable=True, index=True)
-    deal_type: Mapped[str] = mapped_column(String(20))  # farmer_reeler|reeler_spinner|farmer_farmer
+    deal_type: Mapped[str] = mapped_column(String(40))  # farmer_reeler|reeler_spinner|farmer_farmer
     seller_id: Mapped[int] = mapped_column(ForeignKey("entities.id"), index=True)
     buyer_id: Mapped[int] = mapped_column(ForeignKey("entities.id"), index=True)
     approver_id: Mapped[int | None] = mapped_column(ForeignKey("entities.id"), nullable=True, index=True)
@@ -120,6 +120,12 @@ class Deal(Base):
     route: Mapped[dict] = mapped_column(JsonType, default=dict)
     note: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|rejected|executed
+    seller_decision: Mapped[str] = mapped_column(String(10), default="pending")  # pending|approved|rejected
+    buyer_decision: Mapped[str] = mapped_column(String(10), default="pending")
+    rejected_by: Mapped[int | None] = mapped_column(ForeignKey("entities.id"), nullable=True)
+    decline_reason: Mapped[str] = mapped_column(String(300), default="")
+    origin: Mapped[str] = mapped_column(String(10), default="pipeline")  # pipeline (graph incident) | agent (guardian agent)
+    event_id: Mapped[int | None] = mapped_column(ForeignKey("agent_events.id"), nullable=True)
     decided_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -156,4 +162,39 @@ class Notification(Base):
     deal_id: Mapped[int | None] = mapped_column(ForeignKey("deals.id"), nullable=True)
     level: Mapped[str] = mapped_column(String(10), default="info")  # alert | warning | info | deal
     read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class Constant(Base):
+    """Last good value of a domain constant / price, with where it came from."""
+    __tablename__ = "constants"
+    name: Mapped[str] = mapped_column(String(40), primary_key=True)
+    value: Mapped[float] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(200), default="")
+    source_url: Mapped[str] = mapped_column(String(300), default="")
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class AgentEvent(Base):
+    """A change in the network that the guardian agent reacts to (also the agent's activity log)."""
+    __tablename__ = "agent_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entity_id: Mapped[int | None] = mapped_column(ForeignKey("entities.id"), nullable=True, index=True)
+    product: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    reason: Mapped[str] = mapped_column(String(30))  # stock_changed|target_set|deal_executed|deal_rejected|incident|startup
+    data: Mapped[dict] = mapped_column(JsonType, default=dict)
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)  # pending|running|done|error
+    result: Mapped[dict] = mapped_column(JsonType, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class AgentNote(Base):
+    """A lesson the guardian agent chose to remember (read back by its recall tool and situation briefs)."""
+    __tablename__ = "agent_notes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entity_id: Mapped[int | None] = mapped_column(ForeignKey("entities.id"), nullable=True, index=True)
+    text: Mapped[str] = mapped_column(String(300))
+    event_id: Mapped[int | None] = mapped_column(ForeignKey("agent_events.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

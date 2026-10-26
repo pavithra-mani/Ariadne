@@ -1,5 +1,7 @@
 """Affected partners are alerted the moment an incident is assessed - at every tier."""
 import json
+
+from conftest import decide_deals
 from pathlib import Path
 
 import pytest
@@ -92,18 +94,14 @@ def test_silkworm_farmer_sees_his_reelers_by_name(client, auth):
 
 
 def test_mulberry_farmer_cannot_learn_downstream_identities(client, auth):
-    """Data visibility: a mulberry farmer sees only his own farm, so partners in his incident are anonymised."""
+    """The whole chain is visible: the affected buyers are named in the incident and their incidents are linked."""
     inc = photo(client, auth, "mf2", "leaf_blight_sample.jpg", 100)
     blob = json.dumps(inc["payload"])
-    with session_scope() as db:
-        names = [e.name for e in db.query(Entity).filter(Entity.kind.in_(["silkworm_farm", "reeler", "spinner"]))]
-        other_mf = [e.name for e in db.query(Entity).filter(Entity.kind == "mulberry_farm") if e.id != inc["entity_id"]]
-    for n in names + other_mf:
-        assert f'"{n}"' not in blob, f"{n} leaked to the mulberry farmer"
-    assert inc["payload"]["hidden_partners"] >= 1
-    assert client.get("/api/deals", headers=auth("mf2")).json() == []   # the buyers' deals belong to the buyers
+    assert inc["payload"]["hidden_partners"] == 0
+    assert any(a["name"].startswith("SF-") for a in inc["payload"]["supply_impact"]["affected"]) and "Partner not visible" not in blob
+    assert client.get("/api/deals", headers=auth("mf2")).json() == []   # the buyers' deals still belong to the buyers' incidents
     lin = client.get(f"/api/incidents/{inc['id']}", headers=auth("mf2")).json()["lineage"]
-    assert lin["children"] == [] and lin["hidden_children"] >= 1
+    assert lin["children"] and lin["hidden_children"] == 0
 
 
 def test_supplier_issue_opens_a_full_incident_for_each_buyer(client, auth):
@@ -120,7 +118,7 @@ def test_supplier_issue_opens_a_full_incident_for_each_buyer(client, auth):
         h = auth(buyer)
         msgs = [n["message"] for n in client.get("/api/notifications", headers=h).json()]
         assert any("Upstream alert" in m for m in msgs)                                          # 1. alert
-        assert any("alternative source" in m and "Route:" in m and "truck" in m for m in msgs)   # 2. alternatives + routing
+        assert any("offer" in m and "truck" in m for m in msgs)                                  # 2. alternatives + routing + offers sent
         pend = client.get("/api/approvals", headers=h).json()
         assert pend and all(d["can_decide"] and d["route"]["routes"] and d["incident_id"] == cid for d in pend)  # 3. deals
         detail = client.get(f"/api/incidents/{cid}", headers=h).json()
@@ -130,8 +128,8 @@ def test_supplier_issue_opens_a_full_incident_for_each_buyer(client, auth):
     with session_scope() as db:
         eid = db.query(User).filter_by(username=buyer).one().entity_id
         before = get_inv(db, eid, "leaves").on_hand
-    for d in client.get("/api/approvals", headers=h).json():                                      # 4. approve
-        out = client.post(f"/api/deals/{d['id']}/decision", headers=h, json={"approve": True}).json()
+    ids = [d["id"] for d in client.get("/api/approvals", headers=h).json()]
+    out = decide_deals(client, auth, ids)                                                         # 4. buyer AND seller approve
     assert out["graph_resumed"]
     with session_scope() as db:
         assert get_inv(db, eid, "leaves").on_hand > before

@@ -1,0 +1,127 @@
+{
+ "crop": "silkworm",
+ "labels": [
+  "healthy",
+  "silkworm_disease_unspecified",
+  "grasserie"
+ ],
+ "seed": 14,
+ "n_train": 4066,
+ "n_val": 864,
+ "n_test": 900,
+ "class_weights": {
+  "healthy": 0.83,
+  "silkworm_disease_unspecified": 0.837,
+  "grasserie": 2.892
+ },
+ "temperature": 1.05,
+ "history_val_acc": [
+  0.9294,
+  0.9525,
+  0.9583,
+  0.9641,
+  0.9583,
+  0.963,
+  0.956,
+  0.9572,
+  0.956,
+  0.9606,
+  0.9595,
+  0.9641,
+  0.9606,
+  0.9618,
+  0.9595,
+  0.9606
+ ],
+ "test": {
+  "accuracy": 0.9522,
+  "macro_f1": 0.851,
+  "per_class": {
+   "healthy": {
+    "precision": 0.989,
+    "recall": 0.985,
+    "f1": 0.987,
+    "support": 462
+   },
+   "silkworm_disease_unspecified": {
+    "precision": 0.949,
+    "recall": 0.945,
+    "f1": 0.947,
+    "support": 398
+   },
+   "grasserie": {
+    "precision": 0.591,
+    "recall": 0.65,
+    "f1": 0.619,
+    "support": 40
+   }
+  },
+  "confusion[rows=true, cols=pred]": [
+   [
+    455,
+    6,
+    1
+   ],
+   [
+    5,
+    376,
+    17
+   ],
+   [
+    0,
+    14,
+    26
+   ]
+  ]
+ },
+ "test_baseline_majority_class_accuracy": 0.5133,
+ "calibration": {
+  "ece_before_T": 0.0099,
+  "ece_after_T": 0.0115,
+  "mean_confidence_after_T": 0.948,
+  "accuracy": 0.952
+ },
+ "selective_prediction": [
+  {
+   "confidence>=": 0.5,
+   "coverage": 0.998,
+   "accuracy_on_covered": 0.9543
+  },
+  {
+   "confidence>=": 0.6,
+   "coverage": 0.968,
+   "accuracy_on_covered": 0.9667
+  },
+  {
+   "confidence>=": 0.7,
+   "coverage": 0.94,
+   "accuracy_on_covered": 0.9787
+  },
+  {
+   "confidence>=": 0.8,
+   "coverage": 0.911,
+   "accuracy_on_covered": 0.9829
+  },
+  {
+   "confidence>=": 0.9,
+   "coverage": 0.848,
+   "accuracy_on_covered": 0.9908
+  }
+ ],
+ "test_binary_healthy_vs_sick": {
+  "accuracy": 0.987,
+  "precision_sick": 0.984,
+  "recall_sick": 0.989,
+  "specificity": 0.985,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    455,
+    7
+   ],
+   [
+    5,
+    433
+   ]
+  ]
+ }
+}

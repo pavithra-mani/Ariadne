@@ -5,6 +5,9 @@ export const kg = (n: number, d = 0) => Number(n).toLocaleString('en-IN', { maxi
 export const days = (n: number, d = 1) => (n >= 999 ? '∞' : Number(n).toLocaleString('en-IN', { maximumFractionDigits: d }))
 
 const PATHS: Record<string, string> = {
+  chain: 'M3 6.75A2.25 2.25 0 015.25 4.5h2.5A2.25 2.25 0 0110 6.75v.5A2.25 2.25 0 017.75 9.5h-2.5A2.25 2.25 0 013 7.25v-.5zM14 16.75a2.25 2.25 0 012.25-2.25h2.5A2.25 2.25 0 0121 16.75v.5a2.25 2.25 0 01-2.25 2.25h-2.5A2.25 2.25 0 0114 17.25v-.5zM10 7h2.5a2.5 2.5 0 012.5 2.5v5M15 14.5l-1.75-1.75M15 14.5l1.75-1.75',
+  camera: 'M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316zM16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z',
+  dots: 'M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z',
   home: 'M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25',
   chat: 'M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z',
   alert: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z',
@@ -27,9 +30,10 @@ export function Icon({ name, className = 'h-5 w-5' }: { name: string; className?
 }
 
 const TONES: Record<string, string> = {
-  ok: 'bg-emerald-50 text-emerald-700 ring-emerald-200', reorder: 'bg-amber-50 text-amber-700 ring-amber-200',
+  ok: 'bg-emerald-50 text-emerald-700 ring-emerald-200', reorder: 'bg-gold-50 text-gold-700 ring-gold-200',
   critical: 'bg-red-50 text-red-700 ring-red-200', degrading: 'bg-orange-50 text-orange-700 ring-orange-200',
-  slate: 'bg-slate-100 text-slate-600 ring-slate-200', violet: 'bg-brand-50 text-brand-700 ring-brand-100',
+  slate: 'bg-slate-100 text-slate-600 ring-slate-200', violet: 'bg-brand-50 text-brand-700 ring-brand-200',
+  gold: 'bg-gold-50 text-gold-700 ring-gold-200',
   blue: 'bg-sky-50 text-sky-700 ring-sky-200',
 }
 
@@ -40,10 +44,10 @@ export function Badge({ tone = 'slate', children }: { tone?: string; children: R
 export function Card({ title, subtitle, right, children, className = '', pad = true }:
   { title?: ReactNode; subtitle?: ReactNode; right?: ReactNode; children: ReactNode; className?: string; pad?: boolean }) {
   return (
-    <section className={`rounded-2xl border border-slate-200/70 bg-white ${className}`}>
+    <section className={`rounded-2xl border border-brand-100/80 bg-white shadow-soft ${className}`}>
       {(title || right) && (
         <header className="flex items-start justify-between gap-3 px-5 pt-4">
-          <div><h2 className="text-[15px] font-semibold text-ink">{title}</h2>{subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}</div>{right}
+          <div><h2 className="font-display text-[16px] font-semibold text-ink">{title}</h2>{subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}</div>{right}
         </header>
       )}
       <div className={pad ? 'p-5' : ''}>{children}</div>
@@ -54,16 +58,16 @@ export function Card({ title, subtitle, right, children, className = '', pad = t
 export function PageHeader({ title, subtitle, right }: { title: string; subtitle?: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>{subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}</div>{right}
+      <div><h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-ink">{title}</h1><div className="mt-2 h-[3px] w-10 rounded-full bg-gradient-to-r from-gold-400 to-gold-200" />{subtitle && <p className="mt-2.5 text-sm text-slate-500">{subtitle}</p>}</div>{right}
     </div>
   )
 }
 
 export function Stat({ label, value, sub, bar, tone = 'brand' }: { label: string; value: ReactNode; sub?: ReactNode; bar?: number; tone?: string }) {
-  const c = tone === 'red' ? 'bg-red-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-brand-500'
+  const c = tone === 'red' ? 'bg-red-500' : tone === 'amber' ? 'bg-gold-400' : 'bg-gradient-to-r from-brand-500 to-brand-400'
   return (
-    <div className="rounded-2xl border border-slate-200/70 bg-white p-5">
-      <div className="text-xs font-medium text-slate-500">{label}</div>
+    <div className="rounded-2xl border border-brand-100/80 bg-white p-5 shadow-soft">
+      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
       <div className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">{value}</div>
       {bar !== undefined && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${c}`} style={{ width: `${Math.min(bar * 100, 100)}%` }} /></div>}
       {sub && <div className="mt-2 text-xs text-slate-500">{sub}</div>}
@@ -74,7 +78,7 @@ export function Stat({ label, value, sub, bar, tone = 'brand' }: { label: string
 export function Empty({ icon = 'doc', title, children }: { icon?: string; title: string; children?: ReactNode }) {
   return (
     <div className="flex flex-col items-center py-10 text-center">
-      <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400"><Icon name={icon} className="h-6 w-6" /></div>
+      <div className="mb-3 rounded-full bg-brand-50 p-3 text-brand-400"><Icon name={icon} className="h-6 w-6" /></div>
       <div className="text-sm font-medium text-slate-700">{title}</div>
       {children && <div className="mt-1 max-w-md text-sm text-slate-500">{children}</div>}
     </div>
@@ -82,20 +86,35 @@ export function Empty({ icon = 'doc', title, children }: { icon?: string; title:
 }
 
 export const btn = {
-  primary: 'inline-flex items-center justify-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50',
-  ghost: 'inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50',
-  good: 'inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50',
-  bad: 'inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50',
+  primary: 'inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-brand-500 to-brand-700 px-4 py-2 text-sm font-medium text-white shadow-[0_6px_16px_-6px_rgba(80,48,154,0.55)] transition hover:from-brand-600 hover:to-brand-800 hover:shadow-[0_8px_20px_-6px_rgba(80,48,154,0.6)] active:translate-y-px disabled:opacity-50',
+  gold: 'inline-flex items-center justify-center rounded-xl bg-gradient-to-b from-gold-300 to-gold-500 px-4 py-2 text-sm font-semibold text-brand-950 shadow-[0_6px_16px_-6px_rgba(167,123,34,0.6)] transition hover:from-gold-300 hover:to-gold-600 active:translate-y-px disabled:opacity-50',
+  ghost: 'inline-flex items-center justify-center rounded-xl border border-brand-200 bg-white px-3 py-1.5 text-sm font-medium text-brand-800 transition hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50',
+  good: 'inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50',
+  bad: 'inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50',
 }
-export const input = 'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100'
+export const input = 'rounded-xl border border-brand-100 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-100'
 
 export function Tabs({ tabs, value, onChange }: { tabs: [string, string, number?][]; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="mb-4 inline-flex rounded-xl bg-slate-200/60 p-1">
+    <div className="mb-4 inline-flex rounded-xl bg-brand-100/60 p-1">
       {tabs.map(([k, label, n]) => (
-        <button key={k} onClick={() => onChange(k)} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${value === k ? 'bg-white text-ink shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <button key={k} onClick={() => onChange(k)} className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${value === k ? 'bg-white text-brand-800 shadow-soft' : 'text-slate-500 hover:text-brand-700'}`}>
           {label}{n !== undefined && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 text-xs text-slate-500">{n}</span>}
         </button>))}
     </div>
+  )
+}
+
+/** Brand mark: a cocoon wrapped in a gold thread. */
+export function Logo({ size = 28, text = true, light = true }: { size?: number; text?: boolean; light?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden>
+        <ellipse cx="16" cy="16" rx="9" ry="12.5" fill={light ? '#ffffff22' : '#6540b61a'} stroke={light ? '#ffffffaa' : '#6540b6'} strokeWidth="1.4" />
+        <path d="M3 24 C 9 24, 8 12, 16 14 S 23 22, 29 8" stroke="#e0b23a" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="29" cy="8" r="2" fill="#e0b23a" />
+      </svg>
+      {text && <span className={`font-display text-[22px] font-semibold tracking-tight ${light ? 'text-white' : 'text-brand-900'}`}>Ariadne</span>}
+    </span>
   )
 }

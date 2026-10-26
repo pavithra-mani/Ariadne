@@ -1,0 +1,176 @@
+{
+ "legacy_nearest_test_binary": {
+  "n": 900,
+  "accuracy": 0.496,
+  "precision_sick": 0.49,
+  "recall_sick": 0.911,
+  "f1_sick": 0.637,
+  "specificity": 0.102,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    47,
+    415
+   ],
+   [
+    39,
+    399
+   ]
+  ]
+ },
+ "legacy_nearest_train_binary": {
+  "n": 4066,
+  "accuracy": 0.511,
+  "precision_sick": 0.515,
+  "recall_sick": 0.903,
+  "f1_sick": 0.656,
+  "specificity": 0.093,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    183,
+    1785
+   ],
+   [
+    204,
+    1894
+   ]
+  ]
+ },
+ "legacy_nearest_test_3class_confusion[rows=true healthy,infected,grasserie; cols=pred]": [
+  [
+   47,
+   291,
+   124
+  ],
+  [
+   26,
+   290,
+   82
+  ],
+  [
+   13,
+   19,
+   8
+  ]
+ ],
+ "legacy_nearest_test_grasserie_recall_exact": 0.2,
+ "legacy_nearest_test_mean_top_prob": 0.859,
+ "legacy_bicubic_test_binary": {
+  "n": 900,
+  "accuracy": 0.49,
+  "precision_sick": 0.487,
+  "recall_sick": 0.904,
+  "f1_sick": 0.633,
+  "specificity": 0.097,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    45,
+    417
+   ],
+   [
+    42,
+    396
+   ]
+  ]
+ },
+ "legacy_bicubic_train_binary": {
+  "n": 4066,
+  "accuracy": 0.511,
+  "precision_sick": 0.515,
+  "recall_sick": 0.908,
+  "f1_sick": 0.657,
+  "specificity": 0.088,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    173,
+    1795
+   ],
+   [
+    194,
+    1904
+   ]
+  ]
+ },
+ "legacy_bicubic_test_3class_confusion[rows=true healthy,infected,grasserie; cols=pred]": [
+  [
+   45,
+   289,
+   128
+  ],
+  [
+   28,
+   282,
+   88
+  ],
+  [
+   14,
+   20,
+   6
+  ]
+ ],
+ "legacy_bicubic_test_grasserie_recall_exact": 0.15,
+ "legacy_bicubic_test_mean_top_prob": 0.841,
+ "thirdparty_output_row_sums_first5": [
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0
+ ],
+ "thirdparty_test_binary": {
+  "n": 900,
+  "accuracy": 0.397,
+  "precision_sick": 0.415,
+  "recall_sick": 0.589,
+  "f1_sick": 0.487,
+  "specificity": 0.214,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    99,
+    363
+   ],
+   [
+    180,
+    258
+   ]
+  ]
+ },
+ "thirdparty_train_binary": {
+  "n": 4066,
+  "accuracy": 0.449,
+  "precision_sick": 0.476,
+  "recall_sick": 0.653,
+  "f1_sick": 0.55,
+  "specificity": 0.232,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    456,
+    1512
+   ],
+   [
+    727,
+    1371
+   ]
+  ]
+ },
+ "thirdparty_test_binary_if_labels_flipped": {
+  "n": 900,
+  "accuracy": 0.603,
+  "precision_sick": 0.645,
+  "recall_sick": 0.411,
+  "f1_sick": 0.502,
+  "specificity": 0.786,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    363,
+    99
+   ],
+   [
+    258,
+    180
+   ]
+  ]
+ },
+ "thirdparty_mean_p_diseased_on_test_healthy": 0.746,
+ "thirdparty_mean_p_diseased_on_test_sick": 0.561,
+ "base_rate_sick_test": 0.487
+}

@@ -1,0 +1,109 @@
+{
+ "crop": "mulberry",
+ "labels": [
+  "healthy",
+  "leaf_rust",
+  "leaf_spot"
+ ],
+ "seed": 14,
+ "n_train": 760,
+ "n_val": 162,
+ "n_test": 169,
+ "class_weights": {
+  "healthy": 0.913,
+  "leaf_rust": 0.859,
+  "leaf_spot": 1.497
+ },
+ "temperature": 0.85,
+ "history_val_acc": [
+  0.8827,
+  0.9259,
+  0.9444,
+  0.9568,
+  0.9383,
+  0.9568,
+  0.963,
+  0.9506,
+  0.9568,
+  0.9568,
+  0.9568,
+  0.9568,
+  0.9568,
+  0.9568
+ ],
+ "test": {
+  "accuracy": 0.9704,
+  "macro_f1": 0.9585,
+  "per_class": {
+   "healthy": {
+    "precision": 0.973,
+    "recall": 1.0,
+    "f1": 0.986,
+    "support": 71
+   },
+   "leaf_rust": {
+    "precision": 0.973,
+    "recall": 0.973,
+    "f1": 0.973,
+    "support": 73
+   },
+   "leaf_spot": {
+    "precision": 0.957,
+    "recall": 0.88,
+    "f1": 0.917,
+    "support": 25
+   }
+  },
+  "confusion[rows=true, cols=pred]": [
+   [
+    71,
+    0,
+    0
+   ],
+   [
+    1,
+    71,
+    1
+   ],
+   [
+    1,
+    2,
+    22
+   ]
+  ]
+ },
+ "test_baseline_majority_class_accuracy": 0.432,
+ "calibration": {
+  "ece_before_T": 0.0242,
+  "ece_after_T": 0.0325,
+  "mean_confidence_after_T": 0.961,
+  "accuracy": 0.97
+ },
+ "selective_prediction": [
+  {
+   "confidence>=": 0.5,
+   "coverage": 1.0,
+   "accuracy_on_covered": 0.9704
+  },
+  {
+   "confidence>=": 0.6,
+   "coverage": 0.982,
+   "accuracy_on_covered": 0.9819
+  },
+  {
+   "confidence>=": 0.7,
+   "coverage": 0.953,
+   "accuracy_on_covered": 0.9814
+  },
+  {
+   "confidence>=": 0.8,
+   "coverage": 0.941,
+   "accuracy_on_covered": 0.9874
+  },
+  {
+   "confidence>=": 0.9,
+   "coverage": 0.888,
+   "accuracy_on_covered": 1.0
+  }
+ ]
+}

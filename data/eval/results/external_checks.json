@@ -1,0 +1,37 @@
+{
+ "silkworm_D5_healthy_vs_sick": {
+  "n": 492,
+  "accuracy": 0.502,
+  "recall_sick": 1.0,
+  "specificity": 0.0,
+  "confusion[[TN,FP],[FN,TP]]": [
+   [
+    0,
+    245
+   ],
+   [
+    0,
+    247
+   ]
+  ]
+ },
+ "mulberry_D1_healthy_cultivars": {
+  "n": 400,
+  "labels": {
+   "healthy": 224,
+   "leaf_spot": 119,
+   "leaf_rust": 57
+  },
+  "called_healthy": 0.56,
+  "mean_confidence": 0.75
+ },
+ "mulberry_D3_uploads_unlabelled": {
+  "n": 300,
+  "labels": {
+   "leaf_spot": 82,
+   "healthy": 175,
+   "leaf_rust": 43
+  },
+  "share_below_0.5_confidence": 0.083
+ }
+}

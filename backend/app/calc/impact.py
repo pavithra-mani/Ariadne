@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.calc.supply import stock_status
 from app.db.models import Entity, Inventory, Link, Target
-from app.graph.profiles import HORIZON_DAYS, LEAF_PER_KG_COCOON
+from app import constants
 
 INPUT_PRODUCT = {"silkworm_farm": "leaves", "reeler": "cocoon", "spinner": "yarn"}
 OUTPUT_PRODUCT = {"mulberry_farm": "leaves", "silkworm_farm": "cocoon", "reeler": "yarn", "spinner": "thread"}
@@ -27,7 +27,7 @@ def suppliers(db: Session, buyer_id: int) -> list[tuple[Entity, float]]:
 
 
 def expected_output(entity: Entity) -> float:
-    return entity.daily_throughput * HORIZON_DAYS
+    return entity.daily_throughput * constants.get("horizon_days")
 
 
 def exposure_for_buyer(db: Session, buyer: Entity, product: str, lost_qty: float) -> dict:
@@ -65,9 +65,9 @@ def farmer_impact(db: Session, farm: Entity, loss_fraction: float) -> dict:
         for a in affected:
             if a["at_risk"]:
                 cascade.append({"entity_id": a["entity_id"], "name": a["name"],
-                                "cocoon_loss_est": round(a["lost_exposure"] / LEAF_PER_KG_COCOON, 1)})
+                                "cocoon_loss_est": round(a["lost_exposure"] / constants.get("leaf_per_kg_cocoon"), 1)})
     return {
-        "product": product, "horizon_days": HORIZON_DAYS, "expected_output": round(expected_output(farm), 1),
+        "product": product, "horizon_days": constants.get("horizon_days"), "expected_output": round(expected_output(farm), 1),
         "lost_qty": lost, "affected": affected, "n_affected": len(affected),
         "n_at_risk": len([a for a in affected if a["at_risk"]]),
         "total_shortfall": round(sum(a["shortfall"] for a in affected), 1),

@@ -1,5 +1,5 @@
-"""Read-only tools the LLM agents may call. Every tool is bound to the caller's own entity and obeys the
-visibility rules; there are no write tools (money and stock only move through human-approved deals)."""
+"""Read-only tools the LLM agents may call. Every tool is bound to the caller's own entity; there are no write
+tools (money and stock only move through deals that both the seller and the buyer approve)."""
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -48,12 +48,12 @@ def build_tools(ctx: ToolContext) -> list[Callable]:
             return {"outlook": outlook_for(db, db.get(Entity, ctx.entity_id))}
 
     def get_my_partners() -> dict:
-        """The suppliers and buyers the user is allowed to see, with their stock status."""
+        """The user's direct suppliers and buyers, with their stock status (the wider network is visible in the app)."""
         with session_scope() as db:
             vis = visible_entities(db, type("U", (), {"entity_id": ctx.entity_id, "role": ctx.role})())
             rows = []
             for eid, rel in vis.items():
-                if eid == ctx.entity_id:
+                if rel in ("self", "network"):
                     continue
                 e = db.get(Entity, eid)
                 inv = db.query(Inventory).filter_by(entity_id=eid)

@@ -4,7 +4,7 @@ import { Badge } from './ui'
 const PRI: Record<string, { box: string; chip: string; word: string }> = {
   P1: { box: 'border-red-200 bg-red-50', chip: 'bg-red-600', word: 'Urgent' },
   P2: { box: 'border-orange-200 bg-orange-50', chip: 'bg-orange-500', word: 'High' },
-  P3: { box: 'border-amber-200 bg-amber-50', chip: 'bg-amber-500', word: 'Medium' },
+  P3: { box: 'border-gold-200 bg-gold-50', chip: 'bg-gold-500', word: 'Medium' },
   P4: { box: 'border-emerald-200 bg-emerald-50', chip: 'bg-emerald-600', word: 'Low' },
 }
 const human = (s: string) => s.replace(/_/g, ' ')
@@ -77,7 +77,7 @@ export default function IncidentCard({ inc, onOpen, onClose }: { inc: any; onOpe
         <Block title="What to do">
           <p className="mb-3 text-slate-600">{adv.diagnosis}</p>
           <ol className="list-decimal space-y-1.5 pl-5 text-slate-700">{adv.mitigation_steps.map((s: string, i: number) => (
-            <li key={i}>{s}{adv.ungrounded_steps?.includes(i) && <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700 ring-1 ring-amber-200">general advice, not found in the sources</span>}</li>))}</ol>
+            <li key={i}>{s}{adv.ungrounded_steps?.includes(i) && <span className="ml-2 rounded bg-gold-50 px-1.5 py-0.5 text-[11px] text-gold-700 ring-1 ring-gold-200">general advice, not found in the sources</span>}</li>))}</ol>
           {adv.follow_up?.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-slate-500">{adv.follow_up.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>}
           {adv.escalate && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-red-800"><b>{inc.role === 'mulberry_farm' ? 'Escalated: the silkworm farmers you supply were alerted.' : 'Escalated: your reelers were alerted.'}</b> {adv.escalation_reason}</div>}
         </Block>
@@ -106,7 +106,7 @@ export default function IncidentCard({ inc, onOpen, onClose }: { inc: any; onOpe
               </tr>))}</tbody></table></div>
           {p.outcome?.children?.length > 0 && <p className="mt-2 text-sm text-brand-700">Ariadne opened a recovery incident for {p.outcome.children.length} buyer{p.outcome.children.length === 1 ? '' : 's'} that fall below their reorder point: each is alerted, gets alternatives and routes, and decides on the proposed deals itself.</p>}
           <p className="mt-2 text-xs text-slate-400">{p.hidden_partners > 0 ? `${p.hidden_partners} partner(s) are outside your visibility, so only their numbers are shown. ` : ''}Every affected partner was alerted as soon as this incident was assessed.</p>
-          {imp.stranded_cocoon > 0 && <p className="mt-2 text-amber-700">{imp.stranded_cocoon} kg of cocoons are stranded by reduced capacity and will degrade.</p>}
+          {imp.stranded_cocoon > 0 && <p className="mt-2 text-gold-700">{imp.stranded_cocoon} kg of cocoons are stranded by reduced capacity and will degrade.</p>}
         </Block>
       )}
 
@@ -123,7 +123,7 @@ export default function IncidentCard({ inc, onOpen, onClose }: { inc: any; onOpe
               <ol className="mt-1.5 space-y-0.5 text-xs text-slate-500">{c.attempts.map((a: any) => (
                 <li key={a.attempt}>Search {a.attempt}: within {a.radius_km} km → {a.n_candidates} candidate(s), {a.covered_routed} kg routable over {a.total_km} km</li>))}</ol>
             </div>))}</div>
-          {p.outcome?.unresolved?.length > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-amber-900"><b>Needs human follow-up:</b> {p.outcome.unresolved.map((u: any) => `${u.qty} kg ${u.product} for ${u.buyer_name} (${u.reason})`).join('; ')}</div>}
+          {p.outcome?.unresolved?.length > 0 && <div className="mt-3 rounded-xl border border-gold-200 bg-gold-50 p-3.5 text-gold-700"><b>Needs human follow-up:</b> {p.outcome.unresolved.map((u: any) => `${u.qty} kg ${u.product} for ${u.buyer_name} (${u.reason})`).join('; ')}</div>}
           {inc.status === 'awaiting_approval' && <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 p-3.5 text-brand-700">⏸ Paused for approval by <b>{[...new Set(p.plans.filter((c: any) => c.deals?.length).map((c: any) => c.approver))].join(', ')}</b>. No stock or balance changes until then.</div>}
           {p.outcome?.executed?.length > 0 && <p className="mt-3 text-emerald-700">✔ Executed deals: {p.outcome.executed.map((d: number) => `#${d}`).join(', ')}</p>}
           {p.outcome?.rejected?.length > 0 && <p className="mt-1 text-red-700">✖ Rejected deals: {p.outcome.rejected.map((d: number) => `#${d}`).join(', ')}. Nothing changed.</p>}

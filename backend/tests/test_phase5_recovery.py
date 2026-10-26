@@ -1,3 +1,4 @@
+from conftest import decide_deals
 import json
 
 import pytest
@@ -11,7 +12,7 @@ from app.db.seed import reseed_data
 from app.db.session import session_scope
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(autouse=True)
 def clean_slate():
     """Earlier phases leave pending proposals that (correctly) hold stock; start recovery tests fresh."""
     reseed_data()
@@ -55,9 +56,7 @@ def test_surge_pauses_for_human_then_executes_ledger(client, auth):
     parties = deal_parties(plans["deals"])
     ids = {i for p in parties.values() for i in p[:2]}
     before = snapshot(ids)
-    out = None
-    for d in pend:
-        out = client.post(f"/api/deals/{d['id']}/decision", headers=h, json={"approve": True}).json()
+    out = decide_deals(client, auth, [d["id"] for d in pend])
     assert out["graph_resumed"] is True
     after = snapshot(ids)
     buyer = next(iter(parties.values()))[1]
@@ -159,14 +158,13 @@ def test_reeler_failure_opens_buyer_incidents_with_lineage(client, auth):
     assert any(c["id"] == kid for c in client.get(f"/api/incidents/{inc['id']}", headers=h).json()["lineage"]["children"])
 
 
-def test_mulberry_cascade_hides_unseen_children(client, auth):
+def test_mulberry_cascade_links_buyer_incidents(client, auth):
     from pathlib import Path
     img = Path(__file__).resolve().parents[2] / "data" / "images" / "leaf_blight_sample.jpg"
     r = client.post("/api/chat", headers=auth("mf1"), data={"message": "blight everywhere", "fields": json.dumps({"affected_pct": 100})},
                     files={"image": ("leaf_blight.jpg", open(img, "rb"), "image/jpeg")}).json()
     lin = client.get(f"/api/incidents/{r['id']}", headers=auth("mf1")).json()["lineage"]
-    # a mulberry farmer may never see silkworm farms' incidents, only a count
-    assert lin["children"] == []
+    assert lin["children"] and lin["hidden_children"] == 0  # the buyers' incidents are linked and visible
 
 
 def test_graph_failure_marks_incident_error_not_stuck(client, auth, monkeypatch):

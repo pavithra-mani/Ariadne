@@ -16,3 +16,5 @@ pillow>=10
 pytest>=8
 pypdf>=4.0
 google-genai>=1.0
+onnxruntime>=1.18
+numpy>=1.26

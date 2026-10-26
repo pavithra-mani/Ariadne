@@ -13,7 +13,7 @@ export default function Incidents() {
   const close = async (id: number) => { await post(`/api/incidents/${id}/close`); await open(id); api('/api/incidents').then(setRows) }
   return (
     <div>
-      <PageHeader title="Incidents" subtitle="Everything you have reported, plus incidents Ariadne opened for you automatically." />
+      <PageHeader title="Incidents" subtitle="Problems you reported and ones Ariadne opened for you by itself, with the advice, risk rating and offers for each." />
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         <Card pad={false}>
           {rows === null ? <p className="p-5 text-slate-500">Loading…</p> : rows.length === 0 ? <Empty icon="flag" title="No incidents yet">Use the Assistant to report one.</Empty> : (

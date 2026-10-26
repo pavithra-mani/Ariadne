@@ -1,16 +1,15 @@
-"""Role-based data visibility: the single choke point for what a user may read.
+"""Network visibility.
 
-Section 1 of the design doc:
-  mulberry farmer  -> own farm only
-  silkworm farmer  -> own farm + the mulberry farmers supplying him + his collaborating reelers
-  reeler           -> own unit + collaborating spinners + the silkworm farmers supplying him
-  spinner          -> own mill + his reelers
-  (a reeler's / spinner's warehouse is part of its own entity; there is no separate warehouse login)
-API routers must obtain entities/inventory through these helpers, never by raw query.
+The whole supply chain is visible to every signed-in user: the point of Ariadne is that a change at any tier
+(a reeler's extra demand, a farm's disease) propagates through every tier and back, so each participant needs
+to see the effect. What stays restricted is WRITE access: a user can only change their own stock, targets and
+decide on deals they are a party to (enforced in the API routers, not here).
+
+  relation: 'self' | 'supplier' (feeds me directly) | 'buyer' (I feed it directly) | 'network' (everyone else)
 """
 from sqlalchemy.orm import Session
 
-from app.db.models import Link, User
+from app.db.models import Entity, Link, User
 
 
 def suppliers_of(db: Session, entity_id: int) -> list[int]:
@@ -22,17 +21,12 @@ def buyers_of(db: Session, entity_id: int) -> list[int]:
 
 
 def visible_entities(db: Session, user: User) -> dict[int, str]:
-    """Map entity_id -> relation ('self', 'supplier', 'buyer', 'linked')."""
+    """Map entity_id -> relation. Warehouses are part of their owner's entity, so they are not listed."""
     me = user.entity_id
-    out: dict[int, str] = {me: "self"}
-    if user.role == "silkworm_farm":
-        out.update({i: "supplier" for i in suppliers_of(db, me)})
-        out.update({i: "buyer" for i in buyers_of(db, me)})
-    elif user.role == "reeler":
-        out.update({i: "buyer" for i in buyers_of(db, me)})
-        out.update({i: "supplier" for i in suppliers_of(db, me)})
-    elif user.role == "spinner":
-        out.update({i: "supplier" for i in suppliers_of(db, me)})
+    sup, buy = set(suppliers_of(db, me)), set(buyers_of(db, me))
+    out: dict[int, str] = {}
+    for (eid,) in db.query(Entity.id).filter(Entity.kind != "warehouse", Entity.active.is_(True)):
+        out[eid] = "self" if eid == me else "supplier" if eid in sup else "buyer" if eid in buy else "network"
     return out
 
 

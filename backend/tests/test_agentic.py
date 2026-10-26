@@ -154,7 +154,7 @@ def test_tools_only_expose_the_callers_own_data(client, auth):
         sf = db.query(User).filter_by(username="sf1").one()
         mf_e, sf_e = mf.entity_id, sf.entity_id
     tools = {t.__name__: t for t in build_tools(ToolContext(mf_e, "mulberry_farm"))}
-    assert tools["get_my_partners"]()["partners"] == []                    # a mulberry farmer sees nobody else
+    assert {p["relation"] for p in tools["get_my_partners"]()["partners"]} <= {"buyer"}  # the tool lists direct partners only
     assert {s["product"] for s in tools["get_my_stock"]()["stock"]} == {"leaves"}
     stolen = tools["get_my_stock"](product="cocoon")                       # asking for another business' product
     assert stolen["stock"] == []

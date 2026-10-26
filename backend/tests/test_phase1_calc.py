@@ -48,6 +48,7 @@ def test_stock_entry_changes_numbers(client, auth):
     client.post("/api/stock", headers=h, json={"product": "yarn", "set_to": before["on_hand"]})
 
 
-def test_only_spinner_sets_target(client, auth):
-    assert client.post("/api/target", headers=auth("reeler1"), json={"target_qty": 100}).status_code == 403
+def test_only_buyers_of_yarn_set_targets(client, auth):
+    assert client.post("/api/target", headers=auth("mf1"), json={"target_qty": 100}).status_code == 403
     assert client.post("/api/target", headers=auth("spinner1"), json={"target_qty": 300}).status_code == 200
+    assert client.post("/api/target", headers=auth("reeler1"), json={"target_qty": 100}).status_code == 200  # reelers add demand too

@@ -79,7 +79,7 @@ Real participant data does not exist publicly, so the demo uses a **synthetic bu
 | `reeler1` | Reeling Unit R1 (Ramanagara) | 7 farmers (SF-01, 02, 05, 06, 07, 09, 10) · 4 spinners T1–T4 · own R1 Warehouse. Yarn 144 kg, cocoon 1,373 kg. |
 | `spinner1` | Twisting Mill T1 (Ramanagara) | Reelers R1, R3, R4, R5 · own T1 Warehouse. Thread 182 kg, yarn input 177 kg. |
 
-Visibility rules (enforced in the API, tested): a mulberry farmer sees only his farm; a silkworm farmer sees his mulberry suppliers and his reelers; a reeler sees his spinners and his farmers; a spinner sees his reelers. **Anything outside a user's visibility is anonymised** in incidents and deals ("Partner not visible to you"), keeping the numbers but not the identity.
+Visibility: **every user sees the whole chain** (a change at any tier travels through all tiers, so everyone must see the effect). Writes stay scoped: you can only change your own stock and targets, and only the two parties of a deal can decide it.
 
 ### Sample photos (`data/images/`)
 Flat-colour placeholders; the **stub classifier decides from the file name**.
@@ -145,11 +145,11 @@ Plain tables, loadable by SQL or script: `entities` (kind, name, village, lat/lo
 
 Run **Reset demo data** first. Use two browser profiles (or sign out/in) for steps that cross roles. The red badges in the left menu show unread **Alerts** and pending **Approvals** and refresh every few seconds.
 
-**1. Roles and visibility** (Dashboard). `mf1` sees only itself; `sf1` adds MF-06/MF-09 and reelers R1/R3; `reeler1` sees spinners and 7 farmers plus its **warehouse card**; `spinner1` sees its reelers.
+**1. Roles and visibility** (Dashboard). Every role sees all 28 other participants; direct suppliers and buyers are listed first, the rest under *Everyone else in the chain*. `reeler1` also has its **warehouse card**.
 
 **2. Calculations and the stock trigger** (`reeler1` → Dashboard). Level bars show on-hand vs safety (red zone) and reorder point (tick).
 * **Cocoon card → Update stock → set to 50 kg → Save.** The card turns *Below safety stock* and **Ariadne opens an incident by itself**: a banner says *"review 7 proposed deals in Approvals"*. It searched silkworm farms (within a growing radius, max 5 searches), routed pick-ups with OR-Tools to your own warehouse, and priced the purchase. Nothing has changed yet.
-* **Approvals** → approve each proposal (the reeler approves his own purchase). Cocoon stock rises to about 1,100 kg (*Healthy*), the balance drops by the purchase and transport cost, and the selling farmers get a *"Pick-up scheduled"* alert.
+* **Approvals** → deals need **both sides**: the reeler (buyer) approves, and each selling farm gets an offer in its own Approvals (log in as that `sf…` user) and approves too. Only then do stock, balances and ledger move; either side can decline and Ariadne looks for another source.
 * Any product that is not healthy also has an **"Ask Ariadne to restock this"** button (or *"protect my buyers"* for finished goods), which opens the same incident for products that were already low (for example `reeler3`'s thread, or `sf1`'s cocoon). Typing *"my cocoon stock is critical"* in the Assistant does the same.
 * For a **finished** product (e.g. set yarn to 5 kg) the buyers who depend on you are alerted and their shortfall is re-sourced; for a **raw input** (cocoon, leaves, yarn for a spinner) Ariadne buys replacement stock upstream. Only one incident stays open per product, so repeated clicks do not create duplicates.
 
@@ -161,8 +161,8 @@ Whenever a supplier reports a disease, changes its stock, or runs low, Ariadne a
 * Sign in as **`sf5`**. The **Alerts** and **Approvals** badges are lit, and the Dashboard shows two red alerts: *"Upstream alert: MF-03 … running low on leaves … shortfall 919 kg"* and *"Ariadne found 1 alternative source(s) for 1,060 kg of leaves (MF-04) … Route: 3 truck(s), 91 km, about 0h 56m from SF-05 … 1 deal proposal(s) await your approval"*.
 * The **Supply outlook** card on `sf5`'s dashboard shows each supplier ("MF-03 can ship 0 of 184 kg · short 184 kg") and the expected shortfall. It reacts the moment a supplier edits stock or reports a disease. A buyer that still has enough stock shows *"covered by your stock"*.
 * **Incidents** → the new incident is tagged *auto*, with the banner *"Opened automatically. Upstream: MF-03 … reported a 2,133 kg drop"*, its priority, the plan (searches, candidates, km) and the link to the cause.
-* **Approvals** → the proposal with price, transport and route. **Approve** → stock, balance, ledger update; the seller is alerted. **Deals & ledger → Completed**.
-* `mf3` sees none of this by name (mulberry farmers only see their own farm); their incident just shows "3 buyers… outside your visibility".
+* **Approvals** → the proposal with price, transport and route, for the buyer and the seller separately. When both approve → stock, balance, ledger update. **Deals & ledger → Completed**.
+* `mf3` sees the affected silkworm farms by name and can follow their linked incidents.
 * Closing the loop: on `mf3`'s incident press **Mark as recovered**. The disease stops reducing downstream outlooks.
 * A milder case: `mf1` + `powdery_mildew_sample.jpg` at 8 %: `sf3` gets a heads-up but its stock covers it, so no incident is opened.
 
@@ -178,7 +178,7 @@ Whenever a supplier reports a disease, changes its stock, or runs low, Ariadne a
 
 ### Things that can surprise you live
 * Pending proposals **reserve** the seller's stock, so a second unrelated report straight after may find fewer candidates. Reset between scenarios.
-* The **approver is the buyer whose stock is being restored**. Because every buyer has its own incident, deals always appear in that buyer's own Approvals.
+* **Both the seller and the buyer approve every deal.** Offers are sent automatically by Ariadne; each buyer's incident owns its deals.
 * A buyer's incident resumes only when **every** proposal of that incident is decided. If a buyer cannot be fully restocked, the residual loss is passed on to *its* buyers.
 * Buyers already at or below their reorder point (for example `spinner4`'s yarn) always show *below reorder point* in their outlook; supplier events then push them further.
 * Without a Groq key, wording is templated and plain.
@@ -195,7 +195,7 @@ backend/app/rag/       ChromaDB ingest + agentic RAG
 backend/app/calc/      safety stock, ROP, impact maths, supply outlook
 backend/app/routing/   distance provider + OR-Tools
 backend/app/vision/    disease classifier interface (stub / ONNX)
-backend/app/visibility/  role-based visibility (+ anonymisation in api/chat.py, api/ops.py)
+backend/app/visibility/  whole-chain visibility (writes are scoped in the API routers)
 backend/app/db/seed.py   the example network
 backend/app/eval/      scenarios, metrics, runner
 data/{kb,models,images,eval}   drop-in material and eval sets

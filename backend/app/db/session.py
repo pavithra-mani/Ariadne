@@ -32,3 +32,10 @@ def ensure_schema() -> None:
     with engine.begin() as c:
         c.execute(text("ALTER TABLE entities ADD COLUMN IF NOT EXISTS owner_id INTEGER"))
         c.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS level VARCHAR(10) DEFAULT 'info'"))
+        c.execute(text("ALTER TABLE deals ADD COLUMN IF NOT EXISTS seller_decision VARCHAR(10) DEFAULT 'pending'"))
+        c.execute(text("ALTER TABLE deals ADD COLUMN IF NOT EXISTS buyer_decision VARCHAR(10) DEFAULT 'pending'"))
+        c.execute(text("ALTER TABLE deals ADD COLUMN IF NOT EXISTS rejected_by INTEGER"))
+        c.execute(text("ALTER TABLE deals ALTER COLUMN deal_type TYPE VARCHAR(40)"))
+        c.execute(text("ALTER TABLE deals ADD COLUMN IF NOT EXISTS decline_reason VARCHAR(300) DEFAULT ''"))
+        c.execute(text("ALTER TABLE deals ADD COLUMN IF NOT EXISTS origin VARCHAR(10) DEFAULT 'pipeline'"))
+        c.execute(text("ALTER TABLE deals ADD COLUMN IF NOT EXISTS event_id INTEGER"))

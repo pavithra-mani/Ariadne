@@ -45,6 +45,12 @@ def start_budget(n: int | None = None) -> None:
         _calls.set([])
 
 
+def reset_budget() -> None:
+    """Forget the previous request's budget/call log (worker threads are reused between jobs)."""
+    _budget.set(None)
+    _calls.set(None)
+
+
 def spend(purpose: str) -> None:
     b = _budget.get()
     if b is not None:
@@ -134,9 +140,12 @@ class GeminiClient:
     def __init__(self, api_key: str, model: str, rpm: int):
         from google import genai
         self._genai = genai
-        self.client = genai.Client(api_key=api_key)
+        from google.genai import types
+        # a stalled request must not hold an incident hostage: give up after the timeout and use the rule-based path
+        self.client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=settings.llm_timeout_s * 1000))
         self.model, self.rpm = model, max(rpm, 1)
         self._window: deque[float] = deque()
+        self._open_until, self._fails, self._retry_after = 0.0, 0, 30.0
         self._wlock = threading.Lock()
 
     # -- rate limiting + retries
@@ -157,44 +166,50 @@ class GeminiClient:
             waited += sleep
 
     def _generate(self, purpose: str, contents, config):
+        """One LLM request with fast failure: primary model -> fallback model (separate quota) -> rule-based path.
+        Quota/timeouts never make a user wait: after both models fail the circuit opens and later calls skip the
+        LLM instantly until it closes again."""
+        wait = self._open_until - time.monotonic()
+        if wait > 0:
+            stats["fallbacks"] += 1
+            raise LLMUnavailable(f"{purpose}: LLM paused for {wait:.0f}s after repeated failures; using rule-based path")
         spend(purpose)
         stats["calls"] += 1
         last: Exception | None = None
-        for attempt in range(3):
+        for attempt, model in enumerate((self.model, settings.gemini_fallback_model)):
             self._gate()
             t0 = time.perf_counter()
             try:
-                resp = self.client.models.generate_content(model=self.model, contents=contents, config=config)
+                resp = self.client.models.generate_content(model=model, contents=contents, config=config)
                 ms = round((time.perf_counter() - t0) * 1000)
                 usage = getattr(resp, "usage_metadata", None)
                 tin, tout = (getattr(usage, "prompt_token_count", 0) or 0), (getattr(usage, "candidates_token_count", 0) or 0)
                 stats["ok"] += 1
                 stats["tokens_in"] += tin
                 stats["tokens_out"] += tout
-                log_call({"purpose": purpose, "model": self.model, "ms": ms, "tokens_in": tin, "tokens_out": tout, "retries": attempt})
+                log_call({"purpose": purpose, "model": model, "ms": ms, "tokens_in": tin, "tokens_out": tout, "retries": attempt})
+                self._fails = 0
                 return resp
-            except Exception as exc:  # google.genai.errors.APIError, network, etc.
+            except Exception as exc:  # google.genai.errors.APIError, timeout, network...
                 last = exc
-                code = getattr(exc, "code", None)
-                if code == 429 or "RESOURCE_EXHAUSTED" in str(exc):
+                if getattr(exc, "code", None) == 429 or "RESOURCE_EXHAUSTED" in str(exc):
                     stats["rate_limited"] += 1
-                    delay = min(_retry_delay(exc) or 5.0, 20.0)
-                    if attempt < 2:
-                        stats["retried"] += 1
-                        time.sleep(delay)
-                        continue
-                elif code in (500, 502, 503, 504) and attempt < 2:
-                    stats["retried"] += 1
-                    time.sleep(1.5 * (attempt + 1))
-                    continue
-                break
+                    self._retry_after = min(max(_retry_delay(exc) or 30.0, 10.0), 120.0)
+                if attempt == 0:
+                    stats["retried"] += 1  # try the fallback model right away (its quota is separate)
         stats["failed"] += 1
+        self._fails += 1
+        if getattr(last, "code", None) == 429 or "RESOURCE_EXHAUSTED" in str(last):
+            self._open_until = time.monotonic() + self._retry_after
+        elif self._fails >= 2:
+            self._open_until = time.monotonic() + 20.0
         raise LLMUnavailable(f"{purpose}: {type(last).__name__}: {str(last)[:160]}")
 
     def _thinking(self):
         """Gemini 3.x 'thinks' by default (9-13 s calls); a low level keeps agents responsive. 2.5 models use budgets instead."""
         from google.genai import types
-        return types.ThinkingConfig(thinking_level="low") if self.model.startswith("gemini-3") else None
+        return types.ThinkingConfig(thinking_level="low") if self.model.startswith("gemini-3") else \
+            types.ThinkingConfig(thinking_budget=0) if "2.5" in self.model else None
 
     # -- structured output
     def generate_json(self, schema, system, user, purpose, images=None):

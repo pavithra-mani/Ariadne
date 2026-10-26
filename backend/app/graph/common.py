@@ -20,9 +20,21 @@ def traced(name: str, kind: str = "node"):
                      "summary": out.pop("_summary", ""), "tools": out.pop("_tools", []),
                      "agent": out.pop("_agent", []), "llm": take_calls()}
             out["trace"] = [entry]
+            _progress(state, entry)
             return out
         return wrapper
     return deco
+
+
+def _progress(state: dict, entry: dict) -> None:
+    """Show a running incident's steps as they finish (the UI polls the incident while it works)."""
+    try:
+        with session_scope() as db:
+            inc = db.get(Incident, state["incident_id"])
+            if inc is not None and inc.status == "running":
+                inc.trace = list(inc.trace or []) + [entry]
+    except Exception:
+        pass  # progress is cosmetic; the final save writes the full trace
 
 
 def save_incident(state: dict, status: str | None = None, **extra) -> None:

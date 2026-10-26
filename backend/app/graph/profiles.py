@@ -29,9 +29,19 @@ DISEASE_PROFILES: dict[str, dict] = {
                     "keywords": ["blight", "blotch", "curl", "shrivel"]},
     "mosaic_virus": {"crop": "mulberry", "base_severity": 2, "spread": 0, "loss": 0.35, "infectious": True,
                      "keywords": ["mosaic", "mottled", "crinkle", "stunted", "yellow"]},
+    # working assumptions (to be tuned by sericulture experts)
+    "stem_canker": {"crop": "mulberry", "base_severity": 2, "spread": 0, "loss": 0.35, "infectious": True,
+                    "keywords": ["canker", "stem", "bark", "cracked", "branch dieback", "dieback"]},
+    "root_knot": {"crop": "mulberry", "base_severity": 2, "spread": 0, "loss": 0.30, "infectious": True,
+                  "keywords": ["root knot", "gall", "nematode", "stunted", "yellowing", "wilting"]},
     # silkworm
     "leaf_shortage": {"crop": "silkworm", "base_severity": 1, "spread": 0, "loss": 1.0, "infectious": False,
                       "keywords": []},  # cascade from a mulberry incident, not a disease
+    # The silkworm image model separates healthy / grasserie / "diseased but not grasserie". This generic label is deliberately
+    # conservative because every real silkworm disease below is infectious and spreads fast; WORKING ASSUMPTIONS for expert review.
+    # `provisional`: the type is unknown, so the advisory asks discriminating questions and requires expert confirmation.
+    "silkworm_disease_unspecified": {"crop": "silkworm", "base_severity": 2, "spread": 2, "loss": 0.60, "infectious": True,
+                                     "provisional": True, "keywords": []},
     "grasserie": {"crop": "silkworm", "base_severity": 3, "spread": 2, "loss": 0.90, "infectious": True,
                   "keywords": ["milky", "swollen", "shiny", "restless", "climb", "grasserie"]},
     "flacherie": {"crop": "silkworm", "base_severity": 2, "spread": 2, "loss": 0.70, "infectious": True,
@@ -46,11 +56,8 @@ DISEASE_PROFILES: dict[str, dict] = {
 MIN_CONFIDENCE = 0.5
 ESCALATE_LOSS = 0.20  # expected output loss above which the reeler should be told
 
-LEAF_PER_KG_COCOON = 17.0  # approx. kg of leaf consumed per kg of cocoon (placeholder, tune)
-HORIZON_DAYS = 14
 
 
 def priority(severity_idx: int, urgency_idx: int) -> str:
     return PRIORITY_MATRIX[max(0, min(3, severity_idx))][max(0, min(2, urgency_idx))]
 
-COCOON_PER_YARN = 9.5  # kg fresh cocoon per kg raw silk (design corpus: ~8-12)

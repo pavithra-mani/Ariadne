@@ -3,7 +3,7 @@ import { api, post } from '../api'
 import { Card, Empty, PageHeader, btn } from '../components/ui'
 
 const STYLE: Record<string, [string, string]> = {
-  alert: ['bg-red-500', 'At risk'], warning: ['bg-amber-500', 'Heads-up'], deal: ['bg-emerald-500', 'Deal'], info: ['bg-sky-500', 'Info'],
+  alert: ['bg-red-500', 'At risk'], warning: ['bg-gold-500', 'Heads-up'], deal: ['bg-emerald-500', 'Deal'], info: ['bg-sky-500', 'Info'],
 }
 
 export default function Alerts() {
@@ -13,7 +13,7 @@ export default function Alerts() {
   const readAll = async () => { await post('/api/notifications/read'); load() }
   return (
     <div>
-      <PageHeader title="Alerts" subtitle="Told the moment a partner upstream or downstream reports a problem that touches you."
+      <PageHeader title="Alerts" subtitle="Warnings the moment something upstream or downstream affects you, and updates on offers you are part of."
         right={<button onClick={readAll} className={btn.ghost}>Mark all read</button>} />
       <Card pad={false}>
         {items === null ? <p className="p-5 text-slate-500">Loading…</p> : items.length === 0

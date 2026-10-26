@@ -1,0 +1,117 @@
+{
+ "test": {
+  "n": 169,
+  "accuracy": 0.2485,
+  "macro_f1_3class": 0.3033,
+  "per_class": {
+   "healthy": {
+    "precision": 0.941,
+    "recall": 0.225,
+    "support": 71
+   },
+   "leaf_rust": {
+    "precision": 0.556,
+    "recall": 0.068,
+    "support": 73
+   },
+   "leaf_spot": {
+    "precision": 0.284,
+    "recall": 0.84,
+    "support": 25
+   }
+  },
+  "confusion[rows=true healthy,rust,spot; cols=pred healthy,rust,spot,other]": [
+   [
+    16,
+    2,
+    9,
+    44
+   ],
+   [
+    1,
+    5,
+    44,
+    23
+   ],
+   [
+    0,
+    2,
+    21,
+    2
+   ]
+  ],
+  "majority_class_accuracy": 0.432,
+  "predicted_label_histogram": {
+   "leaf_rust": 9,
+   "leaf_spot": 74,
+   "stem_canker": 18,
+   "powdery_mildew": 37,
+   "root_knot": 14,
+   "healthy": 17
+  }
+ },
+ "train": {
+  "n": 760,
+  "accuracy": 0.2066,
+  "macro_f1_3class": 0.2731,
+  "per_class": {
+   "healthy": {
+    "precision": 0.955,
+    "recall": 0.211,
+    "support": 304
+   },
+   "leaf_rust": {
+    "precision": 0.39,
+    "recall": 0.047,
+    "support": 343
+   },
+   "leaf_spot": {
+    "precision": 0.274,
+    "recall": 0.681,
+    "support": 113
+   }
+  },
+  "confusion[rows=true healthy,rust,spot; cols=pred healthy,rust,spot,other]": [
+   [
+    64,
+    11,
+    31,
+    198
+   ],
+   [
+    1,
+    16,
+    173,
+    153
+   ],
+   [
+    2,
+    14,
+    77,
+    20
+   ]
+  ],
+  "majority_class_accuracy": 0.4513,
+  "predicted_label_histogram": {
+   "leaf_rust": 41,
+   "leaf_spot": 281,
+   "stem_canker": 100,
+   "powdery_mildew": 162,
+   "root_knot": 109,
+   "healthy": 67
+  }
+ },
+ "D1_healthy_cultivars": {
+  "n": 400,
+  "called_healthy": 0.265,
+  "predicted_label_histogram": {
+   "leaf_rust": 51,
+   "leaf_spot": 118,
+   "stem_canker": 42,
+   "powdery_mildew": 26,
+   "root_knot": 57,
+   "healthy": 106
+  },
+  "note": "all D1 leaves are healthy cultivars; any non-healthy call is a false alarm (domain differs: Thailand cultivars, 224px crops)"
+ }
+}

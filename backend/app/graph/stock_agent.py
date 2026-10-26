@@ -8,7 +8,7 @@ exposed; their shortfall is re-sourced from alternative suppliers, exactly as in
 import re
 
 from app.calc.impact import buyers, exposure_for_buyer, get_inv
-from app.calc.supply import stock_status
+from app.calc.supply import stock_status, surplus_qty
 from app.db.models import Entity, Inventory
 from app.db.session import session_scope
 from app.graph.common import traced
@@ -63,6 +63,8 @@ def low_stock_agent(state):
             corrected = apply_stated_stock(db, me, product, float(fields["stock_now_kg"]))
         inv = get_inv(db, me.id, product)
         st = stock_status(inv)
+        if fields.get("incident_type") == "surplus":
+            return _surplus_result(me, inv, st, product, float(fields.get("qty") or surplus_qty(inv, st)))
         target = st.reorder_point + inv.daily_demand * 3  # order-up-to level: ROP plus three days of use
         lost = float(fields.get("lost_exposure") or 0.0)  # stock an upstream problem will keep from arriving
         projected = st.available - lost
@@ -106,10 +108,40 @@ def low_stock_agent(state):
                         + (f"order {order_qty:.0f} kg" if not inv.is_finished else f"{impact['n_at_risk']}/{len(rows)} buyers at risk")}
 
 
+def _surplus_result(me: Entity, inv, st, product: str, qty: float) -> dict:
+    """Finished stock that will not be used in time: look for buyers (outbound direction) before it spoils."""
+    days = st.degrades_in_days
+    cases = [{"buyer_id": me.id, "buyer_name": me.name, "product": product, "qty": round(qty, 1), "direction": "outbound",
+              "exclude_ids": [], "deadline_days": round(days, 1)}] if qty > 0.5 else []
+    impact = {"product": product, "horizon_days": HORIZON, "lost_qty": 0.0, "affected": [], "n_affected": 0, "n_at_risk": 0,
+              "total_shortfall": 0.0, "lost_exposure": 0.0, "at_risk": bool(cases), "cases": cases, "escalate": False,
+              "direction": "outbound", "incident_type": "surplus", "stock": st.dict(), "order_qty": 0.0,
+              "target_level": 0.0, "finished": True, "surplus_qty": round(qty, 1)}
+    finding = {"incident_type": "surplus", "label": "surplus", "product": product, "confidence": 1.0, "uncertain": False,
+               "source": "stock_calculations", "status": st.status, "impact": impact, "cause": None, "stock_corrected": None}
+    return {"finding": finding, "incident_kind": "surplus", "mode": "incident", "rag_query": RAG_QUERY[product],
+            "assessment": {"severity_level": 1 if days <= 3 else 0, "urgency_level": 2 if days <= 2 else 1 if days <= 5 else 0,
+                           "rationale": [f"{qty:.0f} kg of {product} will not be used before it degrades (in {days:.0f} days) or far exceeds demand",
+                                         f"{st.days_of_cover:.0f} days of cover at the current draw"]},
+            "_tools": ["postgres.stock", "calc.surplus"], "_summary": f"{me.name}: {qty:.0f} kg {product} surplus, {days:.0f} days to degrade"}
+
+
 def stock_advisory(state):
     f, imp, risk, rag = state["finding"], state["supply_impact"], state.get("risk") or {}, state.get("rag") or {}
     s, product = imp["stock"], f["product"]
     steps: list[str] = []
+    if f["incident_type"] == "surplus":
+        steps = [f"About {imp['surplus_qty']:.0f} kg of your {product} will not be used before it degrades or far exceeds demand.",
+                 "Ariadne is offering it to buyers who need it, nearest first. You approve each sale, and the buyer must approve too.",
+                 "Until a sale is agreed, keep the stock cool and dry and sell the oldest first."] + [p["text"][:200] for p in rag.get("points", [])[:1]]
+        headline = f"{imp['surplus_qty']:.0f} kg of {product} may go to waste"
+        diag = (f"{s['on_hand']:.0f} kg on hand, {s['days_of_cover']:.1f} days of cover, degrades in {s['degrades_in_days']:.0f} days. "
+                f"Severity {risk.get('severity')}, urgency {risk.get('urgency')}.")
+        fb = lambda: Advisory(headline=f"{headline} - priority {risk.get('priority')}", diagnosis=diag, mitigation_steps=steps,
+                              citations=sorted({p["citation"] for p in rag.get("points", [])}))
+        return produce(state, Advisory, "Write a short advisory for a seller with surplus stock using the given steps in meaning.",
+                       {"headline": headline, "diagnosis": diag, "steps": steps, "risk": risk, "evidence": rag.get("points", [])}, fb,
+                       locked={"escalate": False, "escalation_reason": ""})
     if f.get("stock_corrected"):
         c = f["stock_corrected"]
         steps.append(f"As you said, your {c['product']} stock record was updated from {c['from']:.0f} kg to {c['to']:.0f} kg (logged in your ledger).")

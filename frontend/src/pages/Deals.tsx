@@ -20,7 +20,7 @@ export default function Deals() {
   const list = tab === 'active' ? active : done
   return (
     <div>
-      <PageHeader title="Deals & ledger" subtitle="Deals Ariadne proposed for you or for incidents you reported, and every stock and money movement that followed." />
+      <PageHeader title="Deals & ledger" subtitle="Every offer Ariadne made, who approved or declined it, and the stock and money movements that followed." />
       <Tabs value={tab} onChange={setTab} tabs={[['active', 'In progress', active.length], ['done', 'Completed', done.length], ['ledger', 'Ledger', ledger.length]]} />
       {tab !== 'ledger' ? (
         <div className="space-y-4">

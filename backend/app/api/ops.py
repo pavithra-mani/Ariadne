@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.agents.guardian import submit
 from app.calc.outlook import outlook_for
 from app.calc.supply import stock_status
 from app.db.models import (AuditLog, Deal, Entity, Incident, Inventory, Ledger, Notification, Target, User)
@@ -26,7 +27,7 @@ class StockEntry(BaseModel):
 
 def _open_stock_incident(db: Session, user: User, product: str) -> Incident | None:
     rows = db.query(Incident).filter(Incident.entity_id == user.entity_id, Incident.kind == "low_stock",
-                                     Incident.status.in_(["awaiting_approval", "open", "resuming"]))
+                                     Incident.status.in_(["awaiting_approval", "open", "resuming", "running"]))
     return next((i for i in rows if (i.payload or {}).get("finding", {}).get("product") == product
                  or (i.payload or {}).get("input_fields", {}).get("product") == product), None)
 
@@ -38,6 +39,10 @@ def _start_stock_incident(db: Session, user: User, product: str, lost_exposure: 
     if existing:
         return {"incident_id": existing.id, "status": existing.status, "existing": True}
     iid = start_incident(user.role, user.entity_id, user.id, f"{product} stock is low", {"incident_type": "low_stock", "product": product, "lost_exposure": lost_exposure})
+    return _summarise(db, iid)
+
+
+def _summarise(db: Session, iid: int) -> dict:
     db.expire_all()
     inc = db.get(Incident, iid)
     pending = db.query(Deal).filter(Deal.incident_id == iid, Deal.status == "pending").count()
@@ -84,14 +89,16 @@ def adjust_stock(body: StockEntry, user: User = Depends(current_user), db: Sessi
     db.commit()
     st = stock_status(inv)
     out = st.dict()
-    # a supplier's finished stock dropping hits the buyers who rely on it: assess them straight away
+    # the change goes to the guardian agent, which works out who is affected (buyers of a supplier's lost stock,
+    # this entity's own reorder point, suppliers further up the chain) and opens incidents by itself
     drop = sellable_before - st.sellable if inv.is_finished else 0.0
-    if drop > 1:
-        from app.graph.propagate import stock_drop_children
-        out["buyer_incidents"] = stock_drop_children(user.entity_id, body.product, drop)
-    # a product pushed to its reorder point / below safety stock makes Ariadne act by itself
-    if st.status in ("reorder", "critical") and before_status not in ("reorder", "critical"):
-        out["incident"] = _start_stock_incident(db, user, body.product)
+    res = submit(user.entity_id, body.product, "stock_changed", {"before_status": before_status, "sellable_drop": max(drop, 0.0)})
+    out["agent"] = "queued" if res and "queued" in res else "done"
+    if res and "opened" in res:  # inline mode: the agent has already acted
+        mine = [o for o in res["opened"] if o["entity_id"] == user.entity_id]
+        out["buyer_incidents"] = [o for o in res["opened"] if o["entity_id"] != user.entity_id]
+        if mine:
+            out["incident"] = {**_summarise(db, mine[0]["incident_id"]), "existing": False}
     return out
 
 
@@ -108,11 +115,12 @@ def get_target(user: User = Depends(current_user), db: Session = Depends(get_db)
 
 @router.post("/target")
 def set_target(body: TargetIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    if user.role != "spinner":
-        raise HTTPException(403, "Only spinners set yarn targets")
+    if user.role not in ("spinner", "reeler"):
+        raise HTTPException(403, "Only spinners and reelers set yarn demand targets")
     db.add(Target(entity_id=user.entity_id, product="yarn", target_qty=body.target_qty,
                   horizon_days=body.horizon_days))
     db.commit()
+    submit(user.entity_id, "yarn", "target_set", {"target_qty": body.target_qty, "horizon_days": body.horizon_days})
     return body
 
 
@@ -141,7 +149,10 @@ def deal_out(db: Session, d: Deal, me: int, vis: set[int] | None = None) -> dict
             "total": round(d.quantity * d.unit_price + d.transport_cost, 2), "status": d.status,
             "route": d.route if (vis is None or me in (d.seller_id, d.buyer_id, d.approver_id)) else {}, "note": d.note if (vis is None or me in (d.seller_id, d.buyer_id, d.approver_id)) else "", "created_at": d.created_at,
             "seller": _party(s, me, vis, d), "buyer": _party(b, me, vis, d),
-            "approver_id": d.approver_id, "can_decide": d.status == "pending" and d.approver_id == me}
+            "approver_id": d.approver_id, "seller_decision": d.seller_decision, "buyer_decision": d.buyer_decision,
+            "my_side": "seller" if me == d.seller_id else "buyer" if me == d.buyer_id else None,
+            "can_decide": d.status == "pending" and ((me == d.seller_id and d.seller_decision == "pending")
+                                                     or (me == d.buyer_id and d.buyer_decision == "pending"))}
 
 
 @router.get("/deals")

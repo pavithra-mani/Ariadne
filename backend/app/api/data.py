@@ -39,7 +39,12 @@ def eval_latest(user: User = Depends(current_user)):
     files = sorted(RESULTS.glob("*_2*.json")) if RESULTS.exists() else []
     latest: dict[str, dict] = {}
     for f in files:  # sorted by timestamp: later files overwrite earlier ones of the same mode
-        d = json.loads(f.read_text())
+        try:
+            d = json.loads(f.read_text())
+        except Exception:
+            continue
+        if not isinstance(d, dict) or not isinstance(d.get("metrics"), dict) or not d["metrics"]:
+            continue  # other result files live here too (simulator, agentic, vision): only Table-5 reports belong on this page
         d.pop("rows", None)
         mode = "agents" if (d.get("llm_agents") or f.name.startswith(("llm_", "agents_"))) else "rules"
         latest[mode] = {**d, "file": f.name, "mode": mode}

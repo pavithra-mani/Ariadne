@@ -1,0 +1,27 @@
+{
+ "labels": [
+  "leaf_rust",
+  "leaf_spot",
+  "stem_canker",
+  "powdery_mildew",
+  "root_knot",
+  "healthy"
+ ],
+ "input_size": 128,
+ "mean": [
+  0,
+  0,
+  0
+ ],
+ "std": [
+  1,
+  1,
+  1
+ ],
+ "layout": "NHWC",
+ "output": "probs",
+ "min_margin": 0.1,
+ "uncertain_cap": 0.45,
+ "notes": "Converted from model2.h5 (sigmoid head, 6 outputs). The original Flask code only mapped indices 0-4; index 5 is unmapped there. 'healthy' for index 5 is an evidence-based HYPOTHESIS (diseased_* uploads score ~0.06 on it, healthy-looking leaves often peak on it): confirm with whoever trained the model. Scores are not mutually exclusive (sum ~3.5), hence min_margin.",
+ "resample": "nearest"
+}

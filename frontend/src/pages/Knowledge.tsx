@@ -20,7 +20,7 @@ export default function Knowledge() {
   }
   return (
     <div>
-      <PageHeader title="Knowledge base" subtitle={stats ? `${stats.documents} documents · ${stats.chunks} passages. Answers are retrieved, graded and cited, or refused.` : ''} />
+      <PageHeader title="Knowledge base" subtitle={`Ask about disease, rearing, storage or reeling. ${stats ? `${stats.documents} documents · ${stats.chunks} passages. ` : ''}Answers are cited, or Ariadne says it does not know.`} />
       <Card>
         <form onSubmit={e => { e.preventDefault(); ask() }} className="flex gap-2">
           <input className={`${input} flex-1`} placeholder="Ask about disease, rearing, cocoon storage, reeling…" value={q} onChange={e => setQ(e.target.value)} />

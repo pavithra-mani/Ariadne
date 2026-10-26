@@ -1,0 +1,79 @@
+{
+  "n_per_group": 300,
+  "caveat": "models may have been trained on these images",
+  "silkworm": {
+    "groups": {
+      "healthy": {
+        "n": 300,
+        "labels": {
+          "grasserie": 93,
+          "muscardine": 35,
+          "healthy": 30,
+          "pebrine": 54,
+          "flacherie": 88
+        },
+        "uncertain_frac": 0.567,
+        "pred_sick_frac": 0.9
+      },
+      "infected": {
+        "n": 300,
+        "labels": {
+          "muscardine": 49,
+          "grasserie": 72,
+          "pebrine": 56,
+          "healthy": 27,
+          "flacherie": 96
+        },
+        "uncertain_frac": 0.5,
+        "pred_sick_frac": 0.91
+      },
+      "grasserie": {
+        "n": 238,
+        "labels": {
+          "healthy": 64,
+          "muscardine": 22,
+          "flacherie": 44,
+          "pebrine": 60,
+          "grasserie": 48
+        },
+        "uncertain_frac": 0.643,
+        "pred_sick_frac": 0.731
+      }
+    },
+    "healthy_vs_sick": {
+      "accuracy": 0.569,
+      "precision": 0.623,
+      "recall": 0.831,
+      "specificity": 0.1
+    },
+    "grasserie_recall": 0.202,
+    "grasserie_sick_recall": 0.731
+  },
+  "mulberry": {
+    "note": "no disease ground truth available: distribution only, not accuracy",
+    "uploads": {
+      "n": 300,
+      "labels": {
+        "healthy": 78,
+        "leaf_rust": 48,
+        "powdery_mildew": 26,
+        "stem_canker": 37,
+        "leaf_spot": 94,
+        "root_knot": 17
+      },
+      "uncertain_frac": 0.727
+    },
+    "cultivar_photos": {
+      "n": 300,
+      "labels": {
+        "healthy": 83,
+        "powdery_mildew": 17,
+        "stem_canker": 24,
+        "leaf_rust": 45,
+        "leaf_spot": 100,
+        "root_knot": 31
+      },
+      "uncertain_frac": 0.737
+    }
+  }
+}

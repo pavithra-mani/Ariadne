@@ -2,7 +2,7 @@
  1 Inventory DB check -> 2 Alternative Sources (bounded retry) -> 3 Routing/OR-Tools ->
  4 HITL approval -> 5 Deal / rerouting (ledger) -> 6 Notification.
 Only the search direction differs between farmer, reeler and spinner incidents."""
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from langgraph.types import interrupt
 
@@ -13,13 +13,21 @@ from app.config import settings
 from app.db.models import AuditLog, Deal, Entity, Inventory, Ledger, Notification
 from app.db.session import session_scope
 from app.graph.common import save_incident, traced
-from app.graph.profiles import COCOON_PER_YARN
+from app import constants
 from app.routing.provider import road_km
 from app.routing.vrp import MAX_TRANSIT_HOURS, Stop, plan_route
 
 SUPPLIER_KIND = {"leaves": "mulberry_farm", "cocoon": "silkworm_farm", "yarn": "reeler"}
+BUYER_KIND = {"leaves": "silkworm_farm", "cocoon": "reeler", "yarn": "spinner"}  # who consumes a product
+REJECTION_MEMORY_H = 24  # a counterparty that declined is not offered the same trade again for this long
+SELLING = ("downstream", "outbound")  # the subject is the seller
 RADII_KM = [15, 30, 50, 80, 150]  # search k uses RADII_KM[k-1]: nearer sources first, widen on failure
-TRANSPORT_RATE = {"leaves": 0.05, "cocoon": 0.3, "yarn": 1.0}  # INR per kg-km, used only for ranking
+
+
+def transport_rate() -> float:
+    """INR per kg-km of a full truck: the SAME cost model the router uses (ranking used to over-weight distance 7-22x)."""
+    from app.routing.vrp import cost_per_km
+    return cost_per_km() / settings.vehicle_capacity_kg
 DEAL_TYPE = {("mulberry_farm", "silkworm_farm"): "farmer_farmer", ("silkworm_farm", "reeler"): "farmer_reeler",
              ("reeler", "spinner"): "reeler_spinner", ("reeler", "reeler"): "reeler_reeler"}
 
@@ -49,7 +57,7 @@ def inventory_check(state):
             case = {**c, "idx": i, "status": "open", "qty": round(c["qty"], 1), "covered": 0.0,
                     "subject_available": round(st.available, 1) if st else 0.0,
                     "subject_sellable": round(st.sellable, 1) if st else 0.0, "attempts": []}
-            if c["direction"] == "downstream":  # can only offer what is really in stock
+            if c["direction"] in SELLING:  # can only offer what is really in stock
                 case["qty"] = round(min(case["qty"], case["subject_available"]), 1)
             if case["qty"] <= 0.5:
                 case["status"] = "no_need"
@@ -83,10 +91,16 @@ def find_candidates(db, case: dict, radius: float, taken: dict) -> list[dict]:
     out = []
     if direction == "upstream":
         pool = db.query(Entity).filter(Entity.kind == SUPPLIER_KIND[product], Entity.active.is_(True)).all()
+    elif direction == "outbound":  # surplus finished goods: whoever consumes the product next
+        pool = db.query(Entity).filter(Entity.kind == BUYER_KIND.get(product, "-"), Entity.active.is_(True)).all()
     else:  # downstream: other buyers of this product (same tier as the subject)
         pool = db.query(Entity).filter(Entity.kind == subj.kind, Entity.active.is_(True)).all()
+    since = datetime.utcnow() - timedelta(hours=REJECTION_MEMORY_H)
+    declined = {(d.seller_id if direction == "upstream" else d.buyer_id) for d in db.query(Deal).filter(
+        Deal.product == product, Deal.status == "rejected", Deal.created_at > since,
+        (Deal.buyer_id if direction == "upstream" else Deal.seller_id) == subj.id)}
     for e in pool:
-        if e.id == subj.id or e.id in case.get("exclude_ids", []):
+        if e.id == subj.id or e.id in case.get("exclude_ids", []) or e.id in declined:
             continue
         km = road_km(_loc(subj), _loc(e))
         if km > radius:
@@ -97,16 +111,24 @@ def find_candidates(db, case: dict, radius: float, taken: dict) -> list[dict]:
                 continue
             offer = stock_status(inv).sellable - taken.get((e.id, product), 0.0)
             price = inv.unit_price
+        elif direction == "outbound":
+            b_inv = get_inv(db, e.id, product)
+            if not b_inv:
+                continue
+            bst = stock_status(b_inv)
+            offer = max(bst.reorder_point + b_inv.daily_demand * 3 - bst.available, 0.0) - taken.get((e.id, product), 0.0)
+            ref = get_inv(db, subj.id, product)
+            price = ref.unit_price if ref else b_inv.unit_price
         else:
             spare_yarn = max(e.capacity_per_day - e.daily_throughput, 0.0)
-            offer = spare_yarn * COCOON_PER_YARN * max(case.get("deadline_days", 1), 1) - taken.get((e.id, product), 0.0)
+            offer = spare_yarn * constants.get("cocoon_per_yarn") * max(case.get("deadline_days", 1), 1) - taken.get((e.id, product), 0.0)
             ref = get_inv(db, subj.id, product)
             price = ref.unit_price * 0.95 if ref else 0.0  # resale slightly under market
         if offer < 1:
             continue
         out.append({"entity_id": e.id, "name": e.name, "kind": e.kind, "village": e.village, "lat": e.lat,
                     "lon": e.lon, "distance_km": round(km, 1), "offer": round(offer, 1), "unit_price": price,
-                    "score": price + km * TRANSPORT_RATE.get(product, 0.1)})
+                    "score": price + km * transport_rate()})
     return sorted(out, key=lambda c: c["score"])
 
 
@@ -223,12 +245,20 @@ def propose(state):
                     route_by_src.setdefault(s["entity_id"], []).append(r["vehicle"])
             total_served = sum(best["served"].values()) or 1
             c["deals"] = []
+            selling = c["direction"] in SELLING
             for s in best["selection"]:
                 qty = best["served"].get(s["entity_id"], best["served"].get(str(s["entity_id"]), 0))
                 if qty <= 0:
                     continue
                 other = db.get(Entity, s["entity_id"])
-                seller, buyer = (other, subj) if c["direction"] == "upstream" else (subj, other)
+                seller, buyer = (subj, other) if selling else (other, subj)
+                # lock the seller's stock row: concurrent incidents must not promise the same kilograms twice
+                inv = db.query(Inventory).filter_by(entity_id=seller.id, product=c["product"]).with_for_update().first()
+                if inv:
+                    st = stock_status(inv)
+                    qty = round(min(qty, st.sellable if inv.is_finished else st.available), 1)
+                if qty <= 0.5:
+                    continue
                 share = qty / total_served
                 d = Deal(incident_id=state["incident_id"], deal_type=DEAL_TYPE.get((seller.kind, buyer.kind), f"{seller.kind}_{buyer.kind}"),
                          seller_id=seller.id, buyer_id=buyer.id, approver_id=subj.id, product=c["product"], quantity=qty,
@@ -237,24 +267,33 @@ def propose(state):
                                 "routes": best["routes"], "distance_km": best["total_km"], "duration_min": best["total_min"],
                                 "stop_distance_km": s["distance_km"], "search_attempt": best["attempt"],
                                 "radius_km": best["radius_km"]},
-                         note=f"{'Partial: ' if c['status'] == 'partial' else ''}replaces {c['qty']:.0f} kg {c['product']} shortfall for {subj.name}",
-                         status="pending")
+                         note=(f"{subj.name} offers {c['qty']:.0f} kg of {c['product']} it cannot use in time" if selling else
+                               f"{'Partial: ' if c['status'] == 'partial' else ''}replaces {c['qty']:.0f} kg {c['product']} shortfall for {subj.name}"),
+                         status="pending", seller_decision="pending", buyer_decision="pending")
                 db.add(d)
                 db.flush()
-                inv = get_inv(db, seller.id, c["product"])
                 if inv:
-                    inv.reserved += qty  # hold the stock while awaiting approval
+                    inv.reserved += qty  # hold the stock while both sides decide
                 deal_ids.append(d.id)
                 c["deals"].append(d.id)
+                total = qty * d.unit_price + d.transport_cost
+                # the offer goes out by itself: the seller is asked to sell, the buyer is told and asked to confirm
+                db.add(Notification(
+                    entity_id=seller.id, incident_id=state["incident_id"], deal_id=d.id, level="deal",
+                    message=(f"Offer request: {buyer.name} ({buyer.village}) would like to buy {qty:.0f} kg of {c['product']} from you at "
+                             f"₹{d.unit_price:,.0f}/kg (₹{total:,.0f} incl. transport, {s['distance_km']:.0f} km). "
+                             f"Approve or decline in Approvals - nothing moves until both of you approve.")))
+                db.add(Notification(
+                    entity_id=buyer.id, incident_id=state["incident_id"], deal_id=d.id, level="deal",
+                    message=(f"Ariadne found a source: {seller.name} ({seller.village}) can sell you {qty:.0f} kg of {c['product']} at "
+                             f"₹{d.unit_price:,.0f}/kg (₹{total:,.0f} incl. transport). The seller has been asked; "
+                             f"approve or decline in Approvals - nothing moves until both of you approve.")))
             if c.get("deals"):
-                srcs = [x["name"] for x in best["selection"] if best["served"].get(x["entity_id"], best["served"].get(str(x["entity_id"]), 0)) > 0]
-                trucks, km = len(best["routes"]), best["total_km"]
                 db.add(Notification(
                     entity_id=subj.id, incident_id=state["incident_id"], level="alert",
-                    message=(f"Ariadne found {len(srcs)} alternative source(s) for {c['qty']:.0f} kg of {c['product']} "
-                             f"({', '.join(srcs[:4])}{'…' if len(srcs) > 4 else ''}) - covering {best['covered_routed']:.0f} kg. "
-                             f"Route: {trucks} truck(s), {km:.0f} km, about {best['total_min'] // 60}h {best['total_min'] % 60}m from {best['depot']}. "
-                             f"{len(c['deals'])} deal proposal(s) await your approval in Approvals; nothing changes until you decide.")))
+                    message=(f"Ariadne sent {len(c['deals'])} offer(s) for {c['qty']:.0f} kg of {c['product']} "
+                             f"(covering {best['covered_routed']:.0f} kg; route: {len(best['routes'])} truck(s), {best['total_km']:.0f} km, "
+                             f"about {best['total_min'] // 60}h {best['total_min'] % 60}m). Each deal needs the seller and the buyer to approve.")))
             if c["status"] == "partial":
                 unresolved.append({"buyer_id": c["buyer_id"], "buyer_name": c["buyer_name"], "product": c["product"],
                                    "qty": round(c["qty"] - best["covered_routed"], 1),
@@ -280,60 +319,72 @@ def hitl_approval(state):
 
 
 # ------------------------------------------------------------------ 5 deal / rerouting (ledger)
+def execute_deal(db, did: int) -> str:
+    """Move stock and money for ONE deal that both parties approved. The DB deal status is the source of truth,
+    so replaying this can never double-execute. Returns executed | rejected | failed | skipped."""
+    d = db.get(Deal, did)
+    if d.status == "rejected":
+        return "rejected"
+    if d.status == "executed":
+        return "executed"
+    if d.status != "approved":
+        return "skipped"
+    seller, buyer = db.get(Entity, d.seller_id), db.get(Entity, d.buyer_id)
+    s_inv, b_inv = get_inv(db, seller.id, d.product), get_inv(db, buyer.id, d.product)
+    total = d.quantity * d.unit_price + d.transport_cost
+    if buyer.balance < total or not s_inv or s_inv.on_hand < d.quantity:
+        d.status = "failed_funds"
+        if s_inv:
+            s_inv.reserved = max(s_inv.reserved - d.quantity, 0)
+        db.add(AuditLog(actor="system", action="deal_failed", ref=str(did), details={"balance": buyer.balance, "total": total}))
+        return "failed"
+    s_inv.on_hand -= d.quantity
+    s_inv.reserved = max(s_inv.reserved - d.quantity, 0)
+    if b_inv is None:
+        b_inv = Inventory(entity_id=buyer.id, product=d.product, on_hand=0, daily_demand=0, demand_std=0,
+                          shelf_life_days=s_inv.shelf_life_days, unit_price=d.unit_price, is_finished=False)
+        db.add(b_inv)
+    # blend stock age so degradation tracking stays honest
+    old_age = (date.today() - b_inv.stocked_on).days if b_inv.on_hand > 0 else 0
+    new_age = (date.today() - s_inv.stocked_on).days
+    tot = b_inv.on_hand + d.quantity
+    blended = (old_age * b_inv.on_hand + new_age * d.quantity) / tot if tot else 0
+    b_inv.stocked_on = date.fromordinal(date.today().toordinal() - int(round(blended)))
+    b_inv.on_hand = tot
+    buyer.balance -= total
+    seller.balance += d.quantity * d.unit_price
+    memo = f"deal #{did} ({d.deal_type})"
+    db.add_all([
+        Ledger(deal_id=did, entity_id=seller.id, product=d.product, delta_qty=-d.quantity,
+               delta_money=d.quantity * d.unit_price, memo=memo + " sold"),
+        Ledger(deal_id=did, entity_id=buyer.id, product=d.product, delta_qty=d.quantity,
+               delta_money=-total, memo=memo + " bought incl. transport"),
+        AuditLog(actor=f"entity:{d.approver_id}", action="deal_executed", ref=str(did),
+                 details={"qty": d.quantity, "total": total, "seller": seller.id, "buyer": buyer.id, "incident": d.incident_id,
+                          "origin": d.origin}),
+    ])
+    d.status = "executed"
+    return "executed"
+
+
+def confirm_deal(db, d: Deal, incident_id: int | None = None) -> None:
+    """Tell both parties that an executed deal is confirmed."""
+    seller, buyer = db.get(Entity, d.seller_id), db.get(Entity, d.buyer_id)
+    msg = f"Deal #{d.id} confirmed: {seller.name} -> {buyer.name}, {d.quantity:.0f} kg {d.product}"
+    for t in {seller.id, buyer.id}:
+        role = "Pick-up scheduled" if t == seller.id else "Delivery incoming"
+        db.add(Notification(entity_id=t, incident_id=incident_id, deal_id=d.id, level="deal",
+                            message=f"{role}. {msg} (₹{d.quantity * d.unit_price + d.transport_cost:,.0f} incl. transport)."))
+
+
 @traced("deal_rerouting", "recovery")
 def deal_rerouting(state):
-    """Execute approved deals in one transaction. The DB deal status is the source of truth
-    (set by the human decision), so a replay of this node can never double-execute."""
+    """Execute approved deals in one transaction (each deal via `execute_deal`)."""
     executed, rejected, failed = [], [], []
     with session_scope() as db:
         for did in state.get("deal_ids", []):
-            d = db.get(Deal, did)
-            if d.status == "rejected":
-                rejected.append(did)
-                continue
-            if d.status == "executed":
-                executed.append(did)
-                continue
-            if d.status != "approved":
-                continue
-            seller, buyer = db.get(Entity, d.seller_id), db.get(Entity, d.buyer_id)
-            s_inv, b_inv = get_inv(db, seller.id, d.product), get_inv(db, buyer.id, d.product)
-            total = d.quantity * d.unit_price + d.transport_cost
-            if buyer.balance < total or not s_inv or s_inv.on_hand < d.quantity:
-                d.status = "failed_funds"
-                if s_inv:
-                    s_inv.reserved = max(s_inv.reserved - d.quantity, 0)
-                failed.append(did)
-                db.add(AuditLog(actor="system", action="deal_failed", ref=str(did),
-                                details={"balance": buyer.balance, "total": total}))
-                continue
-            s_inv.on_hand -= d.quantity
-            s_inv.reserved = max(s_inv.reserved - d.quantity, 0)
-            if b_inv is None:
-                b_inv = Inventory(entity_id=buyer.id, product=d.product, on_hand=0, daily_demand=0, demand_std=0,
-                                  shelf_life_days=s_inv.shelf_life_days, unit_price=d.unit_price, is_finished=False)
-                db.add(b_inv)
-            # blend stock age so degradation tracking stays honest
-            old_age = (date.today() - b_inv.stocked_on).days if b_inv.on_hand > 0 else 0
-            new_age = (date.today() - s_inv.stocked_on).days
-            tot = b_inv.on_hand + d.quantity
-            blended = (old_age * b_inv.on_hand + new_age * d.quantity) / tot if tot else 0
-            b_inv.stocked_on = date.fromordinal(date.today().toordinal() - int(round(blended)))
-            b_inv.on_hand = tot
-            buyer.balance -= total
-            seller.balance += d.quantity * d.unit_price
-            memo = f"deal #{did} ({d.deal_type})"
-            db.add_all([
-                Ledger(deal_id=did, entity_id=seller.id, product=d.product, delta_qty=-d.quantity,
-                       delta_money=d.quantity * d.unit_price, memo=memo + " sold"),
-                Ledger(deal_id=did, entity_id=buyer.id, product=d.product, delta_qty=d.quantity,
-                       delta_money=-total, memo=memo + " bought incl. transport"),
-                AuditLog(actor=f"entity:{d.approver_id}", action="deal_executed", ref=str(did),
-                         details={"qty": d.quantity, "total": total, "seller": seller.id, "buyer": buyer.id,
-                                  "incident": d.incident_id}),
-            ])
-            d.status = "executed"
-            executed.append(did)
+            r = execute_deal(db, did)
+            {"executed": executed, "rejected": rejected, "failed": failed}.get(r, []).append(did)
     out = {**(state.get("outcome") or {}), "executed": executed, "rejected": rejected, "failed": failed}
     return {"outcome": out, "_tools": ["postgres.ledger"],
             "_summary": f"executed {len(executed)}, rejected {len(rejected)}, failed {len(failed)}"}
@@ -346,15 +397,7 @@ def notification(state):
     n = 0
     with session_scope() as db:
         subject = db.get(Entity, state["entity_id"])
-        for did in out.get("executed", []):
-            d = db.get(Deal, did)
-            seller, buyer = db.get(Entity, d.seller_id), db.get(Entity, d.buyer_id)
-            msg = f"Deal #{did} confirmed: {seller.name} -> {buyer.name}, {d.quantity:.0f} kg {d.product}"
-            for t in {seller.id, buyer.id}:
-                role = "Pick-up scheduled" if t == seller.id else "Delivery incoming"
-                db.add(Notification(entity_id=t, incident_id=state["incident_id"], deal_id=did, level="deal",
-                                    message=f"{role}. {msg} (₹{d.quantity * d.unit_price + d.transport_cost:,.0f} incl. transport)."))
-                n += 1
+        # confirmations for executed deals were sent the moment both parties approved (api/deals.py)
         for u in out.get("unresolved", []):
             db.add(Notification(entity_id=u["buyer_id"], incident_id=state["incident_id"],
                                 level="alert",

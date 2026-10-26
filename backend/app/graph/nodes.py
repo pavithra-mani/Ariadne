@@ -60,8 +60,8 @@ def intake(state):
     if kind != "low_stock" and not state.get("image_path") and looks_like_low_stock(msg):
         fields = {**fields, "incident_type": "low_stock"}  # "my cocoon stock is critical" -> stock incident
         kind = "low_stock"
-    if kind == "low_stock":
-        return {"mode": "incident", "message": msg, "fields": fields, "_summary": f"role={role}, mode=incident (low stock)"}
+    if kind in ("low_stock", "surplus"):
+        return {"mode": "incident", "message": msg, "fields": fields, "_summary": f"role={role}, mode=incident ({kind.replace('_', ' ')})"}
     if role in ("mulberry_farm", "silkworm_farm"):
         issue = bool(state.get("image_path")) or kind in ("disease", "input_shortage") or \
             (bool(ISSUE_WORDS.search(msg)) and not is_question(msg))
@@ -87,8 +87,8 @@ def supervisor(state):
     kind = {"mulberry": "disease", "silkworm": "disease", "spinner": "demand_surge"}.get(route)
     if (state.get("fields") or {}).get("incident_type") == "yarn_shortfall":
         kind = "yarn_shortfall"
-    if (state.get("fields") or {}).get("incident_type") == "low_stock":
-        kind = "low_stock"
+    if (state.get("fields") or {}).get("incident_type") in ("low_stock", "surplus"):
+        kind = state["fields"]["incident_type"]
     if route == "reeler":
         kind = REELER_KINDS[infer_reeler_type(state.get("fields") or {}, state.get("message", ""))]
     mem = recall(state["entity_id"], kind or "query", None, village) if state["mode"] == "incident" else \
@@ -99,7 +99,7 @@ def supervisor(state):
 
 
 def route_after_supervisor(state) -> str:
-    if (state.get("fields") or {}).get("incident_type") == "low_stock":
+    if (state.get("fields") or {}).get("incident_type") in ("low_stock", "surplus"):
         return "stock_monitor_agent"
     return {"mulberry": "mulberry_agent", "silkworm": "silkworm_agent",
             "reeler": "reeler_agent", "spinner": "spinner_agent"}[state["route"]]
@@ -117,6 +117,26 @@ def match_symptoms(crop: str, text: str) -> tuple[str | None, float]:
     return best, (min(0.35 + 0.1 * score, 0.6) if best else 0.0)
 
 
+SILKWORM_DISCRIMINATOR = ("Which of these do you see? (1) milky fluid, swollen shiny skin, larvae climbing the tray edge; "
+                          "(2) black pepper-like spots, uneven growth; (3) chalky white, hard, mummified larvae; "
+                          "(4) sluggish larvae that vomit, have diarrhoea or have stopped feeding.")
+
+
+def _specific_from_symptoms(crop: str, message: str, tools: list) -> tuple[str, float] | None:
+    """A specific disease label from the farmer's written symptoms (>= MIN_CONFIDENCE), or None."""
+    if not (message or "").strip():
+        return None
+    labels = [l for l, pr in DISEASE_PROFILES.items() if pr.get("crop") == crop and not pr.get("provisional") and pr.get("keywords")]
+    dx = diagnose_text(crop, message, labels)
+    if dx is not None and dx[0] in labels and dx[1] >= MIN_CONFIDENCE:
+        tools.append("llm.diagnose")
+        return dx[0], dx[1]
+    label, conf = match_symptoms(crop, message)
+    if label in labels and conf >= MIN_CONFIDENCE:
+        return label, conf
+    return None
+
+
 def farmer_agent(crop: str):
     @traced(f"{crop}_agent", "specialist")
     def node(state):
@@ -126,17 +146,24 @@ def farmer_agent(crop: str):
         fields, tools = state.get("fields") or {}, []
         affected_pct = float(fields.get("affected_pct", 20))
         days_to_harvest = fields.get("days_to_harvest")
-        pred = None
+        pred, image_note = None, {}
         if fields.get("incident_type") == "input_shortage":  # cascaded from an upstream mulberry incident
             label, conf, source = "leaf_shortage", 1.0, "cascade"
         elif state.get("image_path"):
             pred = get_classifier(crop).predict(state["image_path"])
             tools.append(f"disease_classifier[{pred.source}]")
             label, conf, source = normalise_label(pred.label), pred.confidence, pred.source
+            if DISEASE_PROFILES.get(label, {}).get("provisional"):
+                # the image says "diseased, type unknown": a farmer's symptom text may name the disease
+                specific = _specific_from_symptoms(crop, state.get("message", ""), tools)
+                if specific:
+                    image_label, image_conf = label, conf
+                    label, conf, source = specific[0], specific[1], "image+symptoms"
+                    image_note = {"image_label": image_label, "image_confidence": round(image_conf, 3)}
         else:
             label, conf = match_symptoms(crop, state.get("message", ""))
             source = "text_symptoms"
-            labels = [l for l, pr in DISEASE_PROFILES.items() if pr.get("crop") == crop]
+            labels = [l for l, pr in DISEASE_PROFILES.items() if pr.get("crop") == crop and not pr.get("provisional")]
             dx = diagnose_text(crop, state.get("message", ""), labels)  # LLM reads the symptom description
             if dx is not None:
                 label, conf, source = dx[0], dx[1], "llm_symptoms"
@@ -161,10 +188,16 @@ def farmer_agent(crop: str):
                           "rationale": [f"{pretty(label)} base severity {SEVERITY[prof['base_severity']]}",
                                         f"{affected_pct:.0f}% of crop affected",
                                         f"spread: {['slow', 'medium', 'fast'][prof['spread']]}"]}
+        finding.update(image_note)
+        extra = {}
+        if prof and prof.get("provisional"):  # disease present, type unknown: ask questions, hygiene steps, expert confirmation
+            finding["provisional"] = True
+            finding["follow_up_question"] = SILKWORM_DISCRIMINATOR
+            extra["rag_query"] = "silkworm disease isolate disinfect remove dead larvae hygiene"
         if healthy:
             finding["healthy"] = True
         mode = "query" if healthy else "incident"
-        return {"finding": finding, "assessment": assessment, "incident_kind": "disease", "mode": mode,
+        return {"finding": finding, "assessment": assessment, "incident_kind": "disease", "mode": mode, **extra,
                 "_tools": tools,
                 "_summary": f"{label or 'no diagnosis'} ({conf:.0%}, {source})" + (" - UNCERTAIN" if finding["uncertain"] else "")}
     return node
@@ -215,7 +248,7 @@ def risk_node(state):
 @traced("supply_impact", "impact")
 def supply_impact_node(state):
     route, f, risk = state.get("route"), state.get("finding") or {}, state.get("risk") or {}
-    if f.get("incident_type") == "low_stock":
+    if f.get("incident_type") in ("low_stock", "surplus"):
         imp = f["impact"]
         return {"supply_impact": imp, "_tools": ["postgres.stock", "calc.exposure"],
                 "_summary": f"{imp['product']} stock: order {imp['order_qty']:.0f} kg, {imp['n_at_risk']}/{imp['n_affected']} buyers at risk, "
@@ -278,7 +311,7 @@ def advisory_node(state):
         res = {"type": "answer", **out.model_dump(), "structured_by": by}
         return _adv(res, by, meta, f"answer by {by}" + (" (abstained)" if res["abstained"] else ""))
 
-    if f.get("incident_type") == "low_stock":
+    if f.get("incident_type") in ("low_stock", "surplus"):
         out, by, meta = stock_advisory(state)
         res = {"type": "advisory", **out.model_dump(), "structured_by": by}
         _remember(state, res["headline"])
@@ -302,6 +335,8 @@ def advisory_node(state):
              "escalation_reason": reason, "uncertain": bool(uncertain), "memory": state.get("memory")}
 
     def fb():
+        if f.get("provisional") and not f.get("uncertain"):
+            return _provisional_advisory(f, risk, points, cites, escalate, reason)
         if f.get("uncertain") or not label:
             return Advisory(headline="Diagnosis uncertain - expert check needed",
                             diagnosis="The system is not confident enough to name the problem." +
@@ -327,9 +362,25 @@ def advisory_node(state):
                             facts, fb, locked={"escalate": escalate and not f.get("uncertain"), "escalation_reason": reason})
     if f.get("uncertain"):  # never let formatting hide the abstention
         out, by, meta = fb(), "template", None
+    elif f.get("provisional"):  # type unknown: whatever the model wrote, the question and expert confirmation must be there
+        base = _provisional_advisory(f, risk, points, cites, escalate, reason)
+        out = out.model_copy(update={"escalate": True, "escalation_reason": base.escalation_reason,
+                                     "follow_up": [SILKWORM_DISCRIMINATOR] + [x for x in out.follow_up if x != SILKWORM_DISCRIMINATOR],
+                                     "mitigation_steps": out.mitigation_steps if EXPERT_STEP in out.mitigation_steps else out.mitigation_steps + [EXPERT_STEP]})
     res = {"type": "advisory", **out.model_dump(), "structured_by": by}
     _remember(state, res["headline"])
     return _adv(res, by, meta, f"advisory by {by}; escalate={res['escalate']}")
+
+
+def _provisional_advisory(f: dict, risk: dict, points: list[str], cites: list, escalate: bool, reason: str) -> Advisory:
+    """Image says 'diseased' but not which disease: generic hygiene from the KB, a discriminating question, expert confirmation."""
+    hygiene = [_short(p) for p in points if not p.lower().startswith(("symptoms", "cause"))][:4]
+    return Advisory(headline=f"Silkworm disease detected, type unknown - expert confirmation required (priority {risk.get('priority')})",
+                    diagnosis=(f"The photo shows signs of disease ({f.get('confidence', 0):.0%} confidence) but the system cannot tell which one. "
+                               f"Treat the batch as infectious until an expert confirms. Severity {risk.get('severity')}, urgency {risk.get('urgency')}."),
+                    mitigation_steps=hygiene + [EXPERT_STEP], escalate=True,
+                    escalation_reason="Disease type unknown; every silkworm disease is infectious and spreads fast: confirm with an expert and alert your reeler.",
+                    citations=cites, follow_up=[SILKWORM_DISCRIMINATOR])
 
 
 def _adv(res: dict, by: str, meta: dict | None, summary: str) -> dict:

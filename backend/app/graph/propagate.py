@@ -9,13 +9,19 @@ from app.calc.impact import INPUT_PRODUCT, OUTPUT_PRODUCT, buyers, exposure_for_
 from app.db.models import Entity, Incident
 from app.db.session import session_scope
 from app.graph.common import save_incident, traced
-from app.graph.profiles import COCOON_PER_YARN, LEAF_PER_KG_COCOON
+from concurrent.futures import ThreadPoolExecutor
+
+from app import constants
+from app.config import settings
+from app.llm.provider import reset_budget
 from app.graph.runner import start_incident
 
 MAX_DEPTH = 4
 KIND_LABEL = {"mulberry_farm": "mulberry farm", "silkworm_farm": "silkworm farm", "reeler": "reeling unit", "spinner": "twisting mill"}
 EVENT_LABEL = {"low_yarn_output": "low yarn output", "cocoon_shortage": "a cocoon supply shortage", "delivery_delay": "a delivery delay"}
-CONVERT = {"leaves": ("cocoon", LEAF_PER_KG_COCOON), "cocoon": ("yarn", COCOON_PER_YARN)}  # input kg per output kg
+def convert(product: str) -> tuple[str, float]:  # input product -> (output product, input kg per output kg)
+    return {"leaves": ("cocoon", constants.get("leaf_per_kg_cocoon")), "cocoon": ("yarn", constants.get("cocoon_per_yarn")),
+            "yarn": ("thread", constants.get("yarn_per_thread"))}[product]
 
 
 def _depth(db, incident_id: int | None) -> int:
@@ -26,9 +32,9 @@ def _depth(db, incident_id: int | None) -> int:
     return d
 
 
-def has_open_incident(db, entity_id: int, product: str) -> int | None:
-    rows = db.query(Incident).filter(Incident.entity_id == entity_id, Incident.kind == "low_stock",
-                                     Incident.status.in_(["awaiting_approval", "open", "resuming"]))
+def has_open_incident(db, entity_id: int, product: str, kind: str = "low_stock") -> int | None:
+    rows = db.query(Incident).filter(Incident.entity_id == entity_id, Incident.kind == kind,
+                                     Incident.status.in_(["awaiting_approval", "open", "resuming", "running"]))
     for i in rows:
         p = i.payload or {}
         if (p.get("finding") or {}).get("product") == product or (p.get("input_fields") or {}).get("product") == product:
@@ -50,7 +56,7 @@ def buyers_needing_help(db, supplier: Entity, product: str, lost_qty: float) -> 
 def spawn(rows: list[dict], supplier_id: int, supplier_name: str, supplier_kind: str, product: str,
           cause_incident_id: int | None, event: str) -> list[dict]:
     """Start one incident per at-risk buyer (skipping buyers already being handled)."""
-    children = []
+    jobs = []
     with session_scope() as db:
         if _depth(db, cause_incident_id) >= MAX_DEPTH:
             return []
@@ -63,9 +69,17 @@ def spawn(rows: list[dict], supplier_id: int, supplier_name: str, supplier_kind:
         text = f"Upstream: {supplier_name} ({KIND_LABEL[supplier_kind]}) reported {event}."
         fields = {"incident_type": "low_stock", "product": product, "lost_exposure": r["lost_exposure"],
                   "cause_entity": supplier_id, "cause_incident": cause_incident_id, "cause_text": text}
+        jobs.append((r, text, fields))
+
+    def run(job):  # each affected buyer's incident is independent: run them side by side
+        r, text, fields = job
+        reset_budget()
         cid = start_incident(r["kind"], r["entity_id"], None, text, fields, parent_id=cause_incident_id)
-        children.append({"incident_id": cid, "entity_id": r["entity_id"], "product": product, "qty": r["lost_exposure"]})
-    return children
+        return {"incident_id": cid, "entity_id": r["entity_id"], "product": product, "qty": r["lost_exposure"]}
+    if len(jobs) <= 1 or settings.run_mode == "inline":
+        return [run(j) for j in jobs]
+    with ThreadPoolExecutor(max_workers=min(len(jobs), settings.guardian_workers)) as pool:
+        return list(pool.map(run, jobs))
 
 
 def stock_drop_children(entity_id: int, product: str, drop: float) -> list[dict]:
@@ -115,9 +129,9 @@ def propagate_final(state):
             done = sum(d.quantity for d in db.query(Deal).filter(Deal.id.in_(c.get("deals", [])), Deal.status == "executed")) if c.get("deals") else 0.0
             unresolved += max(c["qty"] - done, 0.0)
         name, kind, thr = me.name, me.kind, me.daily_throughput
-    if unresolved <= 0.5 or own_input not in CONVERT:
+    if unresolved <= 0.5 or own_input not in ('leaves', 'cocoon'):
         return {"_summary": "own supply fully restored"}
-    out_product, ratio = CONVERT[own_input]
+    out_product, ratio = convert(own_input)
     lost_out = unresolved / ratio
     frac = round(min(lost_out / max(thr * 7, 1.0), 1.0), 3)
     outcome = {**(state.get("outcome") or {}), "residual_loss_fraction": frac}

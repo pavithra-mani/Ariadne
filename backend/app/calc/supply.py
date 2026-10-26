@@ -64,6 +64,22 @@ def stock_status(inv: Inventory, today: date | None = None) -> StockStatus:
                        inv.is_finished, status)
 
 
+SURPLUS_COVER_DAYS = 14  # more than this many days of sellable stock beyond what the buyers draw is surplus
+MIN_SURPLUS_KG = 20.0
+
+
+def surplus_qty(inv: Inventory, st: StockStatus | None = None) -> float:
+    """Finished stock the owner cannot use or sell in time: it will spoil before the usual demand takes it, or it
+    far exceeds what the buyers draw. Offered to other buyers by the guardian agent."""
+    st = st or stock_status(inv)
+    if not inv.is_finished or st.sellable <= 0:
+        return 0.0
+    spoils = max(st.available - inv.daily_demand * st.degrades_in_days, 0.0) if st.degrades_in_days < min(st.days_of_cover, 365) else 0.0
+    excess = max(st.available - (st.reorder_point + inv.daily_demand * SURPLUS_COVER_DAYS), 0.0)
+    q = min(max(spoils, excess), st.sellable)
+    return round(q, 1) if q >= max(MIN_SURPLUS_KG, 0.1 * st.available) else 0.0
+
+
 def entity_capacity(e: Entity) -> dict:
     util = capacity_utilisation(e.daily_throughput, e.capacity_per_day)
     return {"capacity": e.capacity_per_day, "load": e.daily_throughput, "utilisation": round(util, 3),

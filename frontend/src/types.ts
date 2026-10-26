@@ -34,3 +34,12 @@ export const ROLE_LABEL: Record<Role, string> = {
 export const KIND_LABEL: Record<string, string> = {
   mulberry_farm: 'Mulberry farm', silkworm_farm: 'Silkworm farm', reeler: 'Reeling unit', spinner: 'Twisting mill',
 }
+
+export const isFarmer = (r?: Role) => r === 'mulberry_farm' || r === 'silkworm_farm'
+
+/** Plain-language stock status for farmers. */
+export const FRIENDLY_STATUS: Record<string, [string, string]> = {
+  ok: ['Good', 'ok'], reorder: ['Running low', 'reorder'], critical: ['Very low', 'critical'], degrading: ['Will spoil soon', 'degrading'],
+}
+
+export type NavItem = { to: string; label: string; desc: string; icon: string; badge?: 'approvals' | 'alerts' }

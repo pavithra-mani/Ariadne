@@ -1,0 +1,22 @@
+{
+ "labels": [
+  "healthy",
+  "silkworm_disease_unspecified",
+  "grasserie"
+ ],
+ "input_size": 224,
+ "mean": [
+  0.5,
+  0.5,
+  0.5
+ ],
+ "std": [
+  0.5,
+  0.5,
+  0.5
+ ],
+ "layout": "NHWC",
+ "output": "probs",
+ "notes": "MobileNetV2 (ImageNet) fine-tuned by tools/train_classifier.py on a leak-safe split; softmax with temperature T=1.050 (fit on validation). Test accuracy 0.9522, macro-F1 0.851. See docs/MODELS.md.",
+ "resample": "bilinear"
+}

@@ -1,0 +1,29 @@
+{
+ "settings": {
+  "model": "gemini-2.5-flash-lite",
+  "max_steps": 20,
+  "repeats": 1
+ },
+ "runs": [
+  {
+   "scenario": "S1_demand_surge",
+   "mode_requested": "agent",
+   "offers": 30,
+   "kg_offered": 19499.8,
+   "avg_distance_km": 233.7,
+   "avg_price": 170.1,
+   "residual_uncovered_kg": 20099.5,
+   "n_gaps_after": 18,
+   "mode": "agent+rules",
+   "tool_calls": 0,
+   "invalid_tool_calls": 0,
+   "llm_calls": 0,
+   "seconds": 0.9,
+   "fallback_reason": "LLM failed mid-episode: guardian#1: ClientError: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on",
+   "pass": true,
+   "wall_seconds": 40.4,
+   "llm_requests": 1,
+   "repeat": 0
+  }
+ ]
+}

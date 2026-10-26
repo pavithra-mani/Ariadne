@@ -13,7 +13,11 @@ from app.config import settings
 from app.routing.provider import matrix, travel_minutes
 
 MAX_TRANSIT_HOURS = {"leaves": 5.0, "cocoon": 8.0, "yarn": 24.0, "thread": 24.0}
-COST_PER_KM = 18.0  # INR per vehicle-km (placeholder, tune with transporters' rates)
+
+
+def cost_per_km() -> float:
+    from app import constants
+    return constants.get("truck_cost_per_km")  # INR per vehicle-km: an assumption, see constants.py
 
 
 @dataclass
@@ -43,7 +47,7 @@ def plan_route(start: tuple[float, float], end: tuple[float, float], stops: list
     d_m = [[int(x * 1000) for x in row] for row in dist]
     t_min = [[int(round(travel_minutes(x))) for x in row] for row in dist]
     demand = [0] + [int(math.ceil(v.qty)) for v in visits] + [0]
-    n_vehicles = min(max(math.ceil(sum(demand) / cap), 1), 10)
+    n_vehicles = min(max(math.ceil(sum(demand) / cap), 1), settings.max_vehicles)
     max_min = int(MAX_TRANSIT_HOURS.get(product, 12) * 60)
 
     mgr = pywrapcp.RoutingIndexManager(n + 2, n_vehicles, [0] * n_vehicles, [n + 1] * n_vehicles)
@@ -96,5 +100,5 @@ def plan_route(start: tuple[float, float], end: tuple[float, float], stops: list
     dropped = sorted({visits[k - 1].key for k in range(1, n + 1) if sol.Value(rt.NextVar(mgr.NodeToIndex(k))) == mgr.NodeToIndex(k)})
     served = {k: round(x, 1) for k, x in served.items()}
     return {"routes": routes, "dropped": dropped, "served": served, "total_km": round(total_km, 1),
-            "total_min": total_min, "cost": round(total_km * COST_PER_KM, 2), "feasible": not dropped,
+            "total_min": total_min, "cost": round(total_km * cost_per_km(), 2), "feasible": not dropped,
             "max_transit_min": max_min}

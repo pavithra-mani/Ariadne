@@ -34,7 +34,8 @@ def notify_affected(state):
                          if a["at_risk"] else "Your own stock covers the gap - monitor.")
                 level = "alert" if a["at_risk"] else "warning"
             elif route in ("mulberry", "silkworm"):
-                what = f"{f['label'].replace('_', ' ')} on its {f['crop']}"
+                what = ("a suspected infectious disease on its silkworms (not yet identified; unconfirmed - an expert check is pending)"
+                        if f.get("provisional") else f"{f['label'].replace('_', ' ')} on its {f['crop']}")
                 head = f"Upstream alert: {who} reported {what}, priority {pr}."
                 body = (f" Expected loss ≈ {_kg(imp['lost_qty'])} of {imp['product']} over {imp['horizon_days']} days; "
                         f"your exposure ≈ {_kg(a['exposure_qty'])}. ")

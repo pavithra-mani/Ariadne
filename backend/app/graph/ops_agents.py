@@ -10,7 +10,8 @@ from app.calc.supply import stock_status
 from app.db.models import Entity, Target
 from app.db.session import session_scope
 from app.graph.common import traced
-from app.graph.profiles import COCOON_PER_YARN, HORIZON_DAYS, SEVERITY, URGENCY
+from app import constants
+from app.graph.profiles import SEVERITY, URGENCY
 from app.llm.schemas import Advisory
 from app.agents.advisor import produce
 
@@ -63,7 +64,7 @@ def reeler_agent(state):
             lost = thr * red * days
         elif itype == "cocoon_shortage":
             cocoon_short = float(qty) if qty else cocoon_inv.daily_demand * days * 0.3
-            lost = cocoon_short / COCOON_PER_YARN
+            lost = cocoon_short / constants.get("cocoon_per_yarn")
         else:  # delivery_delay: delayed stock cannot serve spinners inside the window
             lost = float(qty) if qty else sum(
                 (get_inv(db, s.id, "yarn").daily_demand * sh) for s, sh in spinners) * days
@@ -94,7 +95,7 @@ def reeler_agent(state):
                           "exclude_ids": [], "deadline_days": round(cocoon.days_of_cover, 1)})
         stranded = 0.0
         if itype == "low_yarn_output":  # input cocoons idle at reduced capacity -> sell downstream before they degrade
-            reduced_use = thr * (1 - red) * COCOON_PER_YARN
+            reduced_use = thr * (1 - red) * constants.get("cocoon_per_yarn")
             stranded = max(cocoon.available - reduced_use * cocoon.degrades_in_days, 0.0)
             stranded = round(stranded, 1) if stranded > cocoon.safety_stock else 0.0
             if stranded > 0:
@@ -144,7 +145,7 @@ def spinner_agent(state):
     with session_scope() as db:
         me = db.get(Entity, state["entity_id"])
         t = latest_target(db, me.id)
-        base = t.target_qty if t else me.daily_throughput * HORIZON_DAYS
+        base = t.target_qty if t else me.daily_throughput * constants.get("horizon_days")
         target, horizon, explicit = _parse_spinner(fields, msg, base)
         yarn = stock_status(get_inv(db, me.id, "yarn"))
         own_buffer = max(yarn.available - yarn.safety_stock, 0.0)

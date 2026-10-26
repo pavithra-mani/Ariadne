@@ -12,6 +12,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import text
 
+from app import constants
 from app.db.models import (Base, Entity, Inventory, Link, Target, User)
 from app.db.session import engine, session_scope
 from app.security import hash_password
@@ -120,19 +121,19 @@ def build(db, rng: random.Random):
 
     for m in mfs:
         m.daily_throughput = round(m.capacity_per_day * rng.uniform(0.5, 0.85), 1)
-        inv(m, "leaves", True, 4.0, rng.uniform(900, 2500), m.daily_throughput * 0.8, 1, 0)
+        inv(m, "leaves", True, constants.price("leaves"), rng.uniform(900, 2500), m.daily_throughput * 0.8, 1, 0)
     for s in sfs:
         s.daily_throughput = round(s.capacity_per_day * rng.uniform(0.5, 0.85), 1)
-        inv(s, "cocoon", True, 480.0, rng.uniform(120, 320), s.daily_throughput, 4, rng.randint(1, 3))
-        inv(s, "leaves", False, 4.0, rng.uniform(300, 800), rng.uniform(100, 200), 1, 0)
+        inv(s, "cocoon", True, constants.price("cocoon"), rng.uniform(120, 320), s.daily_throughput, 4, rng.randint(1, 3))
+        inv(s, "leaves", False, constants.price("leaves"), rng.uniform(300, 800), rng.uniform(100, 200), 1, 0)
     for r in rls:
         r.daily_throughput = round(r.capacity_per_day * rng.uniform(0.6, 0.85), 1)
-        inv(r, "yarn", True, 4800.0, rng.uniform(70, 160), r.daily_throughput * 0.9, 5, 20)
-        inv(r, "cocoon", False, 480.0, rng.uniform(900, 1700), r.daily_throughput * 9, 3, rng.randint(1, 3))
+        inv(r, "yarn", True, constants.price("yarn"), rng.uniform(70, 160), r.daily_throughput * 0.9, 5, 20)
+        inv(r, "cocoon", False, constants.price("cocoon"), rng.uniform(900, 1700), r.daily_throughput * 9, 3, rng.randint(1, 3))
     for sp in sps:
         sp.daily_throughput = round(sp.capacity_per_day * rng.uniform(0.6, 0.85), 1)
-        inv(sp, "thread", True, 5600.0, rng.uniform(80, 200), sp.daily_throughput * 0.9, 4, 15)
-        inv(sp, "yarn", False, 4800.0, rng.uniform(100, 260), sp.daily_throughput, 5, 20)
+        inv(sp, "thread", True, constants.price("thread"), rng.uniform(80, 200), sp.daily_throughput * 0.9, 4, 15)
+        inv(sp, "yarn", False, constants.price("yarn"), rng.uniform(100, 260), sp.daily_throughput, 5, 20)
     for sp in sps:
         db.add(Target(entity_id=sp.id, product="yarn", target_qty=round(sp.daily_throughput * 14, 0),
                       horizon_days=14))

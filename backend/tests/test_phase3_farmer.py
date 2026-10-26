@@ -67,3 +67,38 @@ def test_incident_visibility_and_validation(client, auth):
     assert client.post("/api/chat", headers=auth("mf1"), data={"message": ""}).status_code == 400
     bad = client.post("/api/chat", headers=auth("mf1"), data={"message": "hi"}, files={"image": ("a.exe", b"x", "application/octet-stream")})
     assert bad.status_code == 400
+
+
+# ---- silkworm image model says "diseased, type unknown" (label silkworm_disease_unspecified)
+def test_generic_silkworm_disease_asks_questions_and_requires_expert(client, auth):
+    inc = chat(client, auth("sf3"), "my worms look unwell", "silkworm_disease_unspecified_sample.jpg", {"affected_pct": 30})
+    f, adv = inc["payload"]["finding"], inc["payload"]["advisory"]
+    assert f["label"] == "silkworm_disease_unspecified" and f["provisional"] is True and not f["uncertain"]
+    assert f["infectious"] and "milky fluid" in f["follow_up_question"] and "pepper" in f["follow_up_question"]
+    assert adv["escalate"] is True and "expert" in adv["headline"].lower()
+    assert any("milky fluid" in q for q in adv["follow_up"])
+    steps = " ".join(adv["mitigation_steps"]).lower()
+    assert "expert" in steps or "extension officer" in steps
+    assert inc["payload"]["rag"]["points"], "generic hygiene steps must come from the knowledge base"
+    assert inc["priority"] in ("P1", "P2", "P3") and inc["severity"] in ("moderate", "high", "critical")
+
+
+def test_symptom_text_names_the_disease_when_image_is_generic(client, auth):
+    inc = chat(client, auth("sf4"), "larvae restless, climbing the tray edge, milky fluid, swollen shiny skin",
+               "silkworm_disease_unspecified_sample.jpg", {"affected_pct": 30})
+    f = inc["payload"]["finding"]
+    assert f["label"] == "grasserie" and f["source"] == "image+symptoms" and not f.get("provisional")
+    assert f["image_label"] == "silkworm_disease_unspecified"
+
+
+def test_llm_cannot_drop_the_question_or_expert_confirmation_for_a_generic_disease(client, auth):
+    """Even if the model writes an advisory with escalate=False and no follow-up, the generic-disease guard restores both."""
+    from app.llm.provider import set_llm_override
+    from app.llm.schemas import Advisory
+    from tests.fakes import FakeLLM
+    set_llm_override(FakeLLM(json={"advisor.final": lambda s, u: Advisory(headline="Probably fine", diagnosis="Looks like a minor issue.",
+                                                                           mitigation_steps=["Keep feeding."], escalate=False)}))
+    inc = chat(client, auth("sf5"), "worms look unwell", "silkworm_disease_unspecified_sample.jpg", {"affected_pct": 30})
+    adv = inc["payload"]["advisory"]
+    assert adv["escalate"] is True and any("milky fluid" in q for q in adv["follow_up"])
+    assert any("expert" in s.lower() or "extension officer" in s.lower() for s in adv["mitigation_steps"])

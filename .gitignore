@@ -7,3 +7,9 @@ data/chroma/
 data/uploads/
 *.pyc
 data/kb_raw/
+
+# large third-party / training material (the small converted data/models/*.onnx + *.json stay tracked, ~15 MB each)
+data/models/MULBERRY LEAF PREDICTION/
+data/models/Silkworm-Disease-CNN-main/
+data/images/SILK WORM DATASETS/
+data/images/Mulberry Leaf Dataset/

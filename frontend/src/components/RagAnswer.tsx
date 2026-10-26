@@ -4,7 +4,7 @@ export default function RagAnswer({ rag }: { rag: any }) {
   if (!rag) return null
   if (rag.abstained)
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <div className="rounded-xl border border-gold-200 bg-gold-50 p-4 text-sm text-gold-700">
         <b>I don't have reliable information on this.</b> {rag.reason} Please consult an expert or your local sericulture office.
       </div>
     )

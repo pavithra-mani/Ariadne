@@ -1,17 +1,14 @@
-# Disease models (drop-in)
+# Disease models
 
-Place your pre-trained models here. Ariadne loads them automatically at startup:
+Active (loaded by `backend/app/vision/classifier.py`):
 
-    data/models/mulberry.onnx   + data/models/mulberry.json
-    data/models/silkworm.onnx   + data/models/silkworm.json
+    data/models/silkworm.onnx + silkworm.json   labels: healthy, silkworm_disease_unspecified, grasserie
+    data/models/mulberry.onnx + mulberry.json   labels: healthy, leaf_rust, leaf_spot
 
-`<crop>.json`:
-    {"labels": ["healthy", "leaf_rust", ...],   // class order of the model output
-     "input_size": 224,
-     "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225],
-     "layout": "NCHW"}                          // or "NHWC"
+MobileNetV2 fine-tuned on a leak-safe split, temperature-calibrated softmax; see `docs/MODELS.md` for protocol, numbers and
+**limitations (they fail on photos from other sources)**. `<crop>.json` keys: labels, input_size, mean/std (x/255 then (x-mean)/std),
+layout (NHWC), output ("probs" | "logits"), resample (nearest|bilinear|bicubic - must match training), optional min_margin/uncertain_cap.
 
-For other formats (PyTorch / Paddle / Keras) implement `DiseaseClassifier` in
-`backend/app/vision/classifier.py` and register it in `get_classifier`.
-Until a model is present a clearly-flagged stub classifier is used (reads the label from
-the image file name, e.g. `grasserie_1.jpg`, otherwise a deterministic pseudo-label).
+Legacy (the team's original Keras models, kept for ablation only): `*_legacy.{onnx,json}`, select with `ARIADNE_MODEL_VARIANT=legacy`.
+Third-party/large material (not committed): `MULBERRY LEAF PREDICTION/`, `Silkworm-Disease-CNN-main/`.
+Tests use a file-name stub (`ARIADNE_CLASSIFIER=stub`); in production a missing model falls back to Gemini vision only if DISEASE_FALLBACK=gemini.
