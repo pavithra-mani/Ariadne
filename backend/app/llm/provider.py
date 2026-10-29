@@ -19,6 +19,7 @@ from typing import Any, Callable, Protocol, TypeVar
 from pydantic import BaseModel
 
 from app.config import settings
+from app.observability import traceable
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -180,7 +181,7 @@ class GeminiClient:
             self._gate()
             t0 = time.perf_counter()
             try:
-                resp = self.client.models.generate_content(model=model, contents=contents, config=config)
+                resp = _traced_generate(self.client, model, purpose, contents, config)
                 ms = round((time.perf_counter() - t0) * 1000)
                 usage = getattr(resp, "usage_metadata", None)
                 tin, tout = (getattr(usage, "prompt_token_count", 0) or 0), (getattr(usage, "candidates_token_count", 0) or 0)
@@ -250,13 +251,25 @@ class GeminiClient:
             for fc in calls:
                 fn, args = registry.get(fc.name), dict(fc.args or {})
                 try:
-                    out = fn(**args) if fn else {"error": f"unknown tool {fc.name}"}
+                    out = _traced_tool(fc.name, fn, args) if fn else {"error": f"unknown tool {fc.name}"}
                 except Exception as exc:  # tool errors go back to the model, never crash the run
                     out = {"error": f"{type(exc).__name__}: {exc}"}
                 run.steps.append({"tool": fc.name, "args": args, "result": _brief(out)})
                 replies.append(types.Part.from_function_response(name=fc.name, response={"result": out}))
             contents.append(types.Content(role="user", parts=replies))
         return run
+
+
+@traceable(run_type="llm", name="gemini", process_inputs=lambda d: {"model": d["model"], "purpose": d["purpose"]},
+           process_outputs=lambda r: {"text": (getattr(r, "text", None) or "")[:500],
+                                      "tool_calls": [p.function_call.name for c in (getattr(r, "candidates", None) or [])
+                                                     for p in ((c.content.parts if c.content else None) or []) if p.function_call]})
+def _traced_generate(client, model, purpose, contents, config):
+    return client.models.generate_content(model=model, contents=contents, config=config)
+
+
+def _traced_tool(name: str, fn: Callable, args: dict):
+    return traceable(run_type="tool", name=name)(lambda **kw: fn(**kw))(**args)
 
 
 def _brief(x: Any, n: int = 220) -> str:

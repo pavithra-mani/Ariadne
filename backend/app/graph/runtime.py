@@ -1,11 +1,10 @@
 """Graph runtime: Postgres checkpointer (needed for HITL interrupt/resume) + compiled graph."""
-import os
-
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from app.config import settings
 from app.graph.build import build_graph
+from app.observability import configure
 
 _pool = None
 _graph = None
@@ -20,10 +19,7 @@ def init_graph():
                            kwargs={"autocommit": True, "row_factory": dict_row, "prepare_threshold": 0})
     saver = PostgresSaver(_pool)
     saver.setup()
-    if settings.langsmith_api_key:  # LangSmith observability switches on with the key
-        os.environ.setdefault("LANGSMITH_API_KEY", settings.langsmith_api_key)
-        os.environ.setdefault("LANGSMITH_TRACING", "true")
-        os.environ.setdefault("LANGSMITH_PROJECT", "ariadne")
+    configure()  # LangSmith observability switches on with the key
     _graph = build_graph(saver)
     return _graph
 

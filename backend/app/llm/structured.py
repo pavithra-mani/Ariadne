@@ -12,6 +12,7 @@ from typing import Callable, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from app.config import settings
+from app.observability import traceable
 from app.llm.provider import LLMUnavailable, get_llm, stats as llm_stats
 
 T = TypeVar("T", bound=BaseModel)
@@ -39,6 +40,7 @@ def _get_client():
     return _client
 
 
+@traceable(run_type="llm", name="groq_structure")
 def _call(messages: list[dict]) -> str:
     r = _get_client().chat.completions.create(
         model=settings.groq_model, messages=messages, temperature=0,

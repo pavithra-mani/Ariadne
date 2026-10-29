@@ -26,6 +26,7 @@ from app.calc.objective import HEDGE, Offer, depot_of, evaluate_plan
 from app.calc.impact import INPUT_PRODUCT, OUTPUT_PRODUCT, get_inv
 from app.calc.supply import stock_status, surplus_qty
 from app.config import settings
+from app.observability import traceable
 from app.db.models import Deal, Entity, Inventory, Notification
 from app.db.session import session_scope
 from app.graph.recovery import BUYER_KIND, DEAL_TYPE, RADII_KM, SUPPLIER_KIND, find_candidates
@@ -365,6 +366,8 @@ def describe_events(batch: list[tuple]) -> str:
     return "\n".join(lines)
 
 
+@traceable(run_type="chain", name="guardian_episode",
+           process_inputs=lambda d: {"events": [b[0] for b in d["batch"]]})
 def run_episode(batch: list[tuple]) -> dict:
     """One agent episode for a batch of events. Raises LLMUnavailable if there is no LLM to decide with."""
     llm = get_llm()

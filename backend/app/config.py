@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     jwt_hours: int = 12
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-20b"
     langsmith_api_key: str = ""
 
     # Gemini drives the agentic reasoning (triage, tool-using advisor, RAG grading, recovery planning)

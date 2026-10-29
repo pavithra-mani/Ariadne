@@ -1,6 +1,8 @@
 import os
 
 os.environ.setdefault("ARIADNE_CLASSIFIER", "stub")  # tests use the file-name stub, not the trained models
+os.environ["LANGSMITH_API_KEY"] = ""      # keep test runs out of the LangSmith project
+os.environ["LANGSMITH_TRACING"] = "false"
 
 import pytest
 from fastapi.testclient import TestClient
